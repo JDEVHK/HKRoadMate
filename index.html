@@ -21,17 +21,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
     <style>
-        /* 改為乾淨的珍珠白/淺灰動態背景 */
         body {
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: linear-gradient(-45deg, #f8f9fa, #e9ecef, #f1f3f5, #dee2e6);
             background-size: 400% 400%;
             animation: gradientBG 15s ease infinite;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
+            overflow: hidden; height: 100vh; width: 100vw;
         }
 
         @keyframes gradientBG {
@@ -40,75 +36,45 @@
             100% { background-position: 0% 50%; }
         }
 
-        /* 更透白清澈的 Liquid Glass 效果 */
         .glass {
             background: rgba(255, 255, 255, 0.45);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.8);
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
         }
         
         .glass-heavy {
             background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.95);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
         }
 
-        /* Map Tweaks */
         #map-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: calc(100vh - 80px);
-            z-index: 10;
+            position: absolute; top: 0; left: 0; width: 100%; height: calc(100vh - 80px); z-index: 10;
         }
 
         .leaflet-popup-content-wrapper, .leaflet-popup-tip {
             background: rgba(255, 255, 255, 0.9) !important;
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.8);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
-            border-radius: 1.5rem !important;
-            color: #1f2937 !important;
+            backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+            border-radius: 1.5rem !important; color: #1f2937 !important;
         }
-
-        .leaflet-container a.leaflet-popup-close-button {
-            color: #4b5563;
-            padding: 8px;
-        }
+        .leaflet-container a.leaflet-popup-close-button { color: #4b5563; padding: 8px; }
 
         .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
-            background-color: rgba(255, 255, 255, 0.6) !important;
-            backdrop-filter: blur(8px);
-            border: 2px solid rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            color: #1e3a8a !important;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            background-color: rgba(255, 255, 255, 0.6) !important; backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.9); border-radius: 50%;
+            color: #1e3a8a !important; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
-        .marker-cluster div {
-            background-color: transparent !important;
-        }
+        .marker-cluster div { background-color: transparent !important; }
 
-        /* Custom Views */
         .view-section {
-            display: none;
-            height: calc(100vh - 80px);
-            overflow-y: auto;
-            position: absolute;
-            top: 0;
-            width: 100%;
-            z-index: 20;
-            padding-top: env(safe-area-inset-top);
+            display: none; height: calc(100vh - 80px); overflow-y: auto; position: absolute;
+            top: 0; width: 100%; z-index: 20; padding-top: env(safe-area-inset-top);
         }
         .view-section.active { display: block; }
         #map-view.active { display: block; z-index: 10; }
-
         button, div { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         ::-webkit-scrollbar { display: none; }
     </style>
@@ -172,17 +138,24 @@
     </div>
 
     <script>
-        const MOCK_DATA = {
-            meters: [
-                { id: 'm1', type: 'meter', name: '駱克道 (波斯富街至景隆街)', lat: 22.2805, lng: 114.1830, count: 5, status: [1, 0, 1, 1, 0] },
-                { id: 'm2', type: 'meter', name: '大南街 (深水埗段)', lat: 22.3302, lng: 114.1620, count: 8, status: [0, 0, 0, 0, 1, 0, 0, 0] },
-                { id: 'm3', type: 'meter', name: '廣東道 (海港城外)', lat: 22.2965, lng: 114.1685, count: 4, status: [0, 0, 0, 0] },
-                { id: 'm4', type: 'meter', name: '眾安街 (荃灣段)', lat: 22.3713, lng: 114.1142, count: 6, status: [1, 1, 1, 0, 1, 1] },
-                { id: 'm5', type: 'meter', name: '駿業街 (觀塘段)', lat: 22.3115, lng: 114.2238, count: 10, status: [0, 1, 0, 1, 0, 1, 0, 1, 0, 0] }
-            ]
-        };
+        let map, markersGroup;
+        let allPointsMap = new Map(); // 改用 Map 提升效能及方便檢索
+        let tempItemToSave = null;
 
-        let map, markersGroup, allPoints = [], tempItemToSave = null;
+        // CSV 解析器：處理政府數據
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/).filter(l => l.trim());
+            if (lines.length === 0) return [];
+            const headers = lines[0].split(',').map(h => h.trim());
+            const result = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const obj = {};
+                headers.forEach((h, idx) => { obj[h] = values[idx] ? values[idx].trim() : ''; });
+                result.push(obj);
+            }
+            return result;
+        }
 
         const listManager = {
             getLists() {
@@ -244,7 +217,7 @@
                     let itemsHtml = list.items.length === 0 
                         ? '<p class="text-sm text-gray-400 italic px-2">無收藏項目</p>' 
                         : list.items.map(item => {
-                            const availVal = item.available !== undefined ? item.available : (item.status ? item.status.filter(s=>s===1).length : 0);
+                            const availVal = item.available !== undefined ? item.available : (item.statusArray ? item.statusArray.filter(s=>s===1).length : 0);
                             const availColor = availVal > 0 ? 'text-green-500' : (availVal === 0 ? 'text-red-500' : 'text-gray-500');
                             return `
                                 <div class="glass p-3 rounded-2xl flex justify-between items-center mb-2 active:scale-95 transition-transform" onclick="app.flyTo(${item.lat}, ${item.lng})">
@@ -299,10 +272,11 @@
             updateStatus(msg, type) {
                 document.getElementById('status-text').innerText = msg;
                 const dot = document.getElementById('status-dot');
-                dot.className = `w-2 h-2 rounded-full mr-2 animate-pulse ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-400'}`;
+                dot.className = `w-2 h-2 rounded-full mr-2 ${type === 'loading' ? 'animate-pulse' : ''} ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-400'}`;
             },
-            showSaveModal(itemDataString) {
-                tempItemToSave = JSON.parse(decodeURIComponent(itemDataString));
+            showSaveModal(pointId) {
+                tempItemToSave = allPointsMap.get(pointId);
+                if(!tempItemToSave) return;
                 const wrapper = document.getElementById('modal-lists-wrapper');
                 wrapper.innerHTML = listManager.getLists().map(l => `
                     <button onclick="listManager.addItemToList('${l.id}', tempItemToSave)" class="w-full text-left px-4 py-3 glass rounded-2xl flex justify-between items-center active:scale-95">
@@ -342,80 +316,108 @@
                     attribution: '© OpenStreetMap', maxZoom: 19
                 }).addTo(map);
 
+                // 開啟 chunkedLoading 確保巨量資料不會卡死 UI
                 markersGroup = L.markerClusterGroup({
-                    maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false, zoomToBoundsOnClick: true
+                    maxClusterRadius: 60, spiderfyOnMaxZoom: true, showCoverageOnHover: false, chunkedLoading: true
                 });
                 map.addLayer(markersGroup);
-                map.on('moveend', () => this.renderMarkersInBounds());
+                
+                // 移除了舊版的 map.on('moveend') 事件，徹底解決卡頓問題
             },
 
-            // 重構：真實調用資料一站通 API
             async fetchData() {
-                uiManager.updateStatus('連線至資料一站通...', 'loading');
+                uiManager.updateStatus('抓取全港實時數據...', 'loading');
                 try {
-                    // 同步請求基本資訊與實時空位數據
-                    const [infoRes, vacancyRes] = await Promise.all([
+                    // 同時請求四個數據源（政府停車場 Info/Vacancy + 咪錶 Info/Vacancy）
+                    const [cpInfoRes, cpVacRes, meterInfoRes, meterVacRes] = await Promise.all([
                         fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=info&lang=zh_TW'),
-                        fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW')
+                        fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW'),
+                        fetch('https://resource.data.one.gov.hk/td/psiparkingspaces/spaceinfo/parkingspaces.csv'),
+                        fetch('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
                     ]);
                     
-                    if(!infoRes.ok || !vacancyRes.ok) throw new Error('API 無法接通');
+                    if(!cpInfoRes.ok || !meterInfoRes.ok) throw new Error('API 無法接通');
 
-                    const infoData = await infoRes.json();
-                    const vacancyData = await vacancyRes.json();
-
-                    const infoList = infoData.results || [];
-                    const vacancyList = vacancyData.results || [];
-                    
-                    // 建立以 park_Id 為 Key 的空位查詢表
+                    // 1. 處理停車場數據
+                    const infoData = await cpInfoRes.json();
+                    const vacancyData = await cpVacRes.json();
                     const vacancyMap = {};
-                    vacancyList.forEach(v => {
+                    (vacancyData.results || []).forEach(v => {
                         let count = 0;
-                        if(v.privateCar && v.privateCar.length > 0) {
-                            count = parseInt(v.privateCar[0].vacancy) || 0;
-                            if(count < 0) count = 0; // 過濾異常負數
-                        }
-                        vacancyMap[v.park_Id] = count;
+                        if(v.privateCar && v.privateCar.length > 0) count = parseInt(v.privateCar[0].vacancy) || 0;
+                        vacancyMap[v.park_Id] = count < 0 ? 0 : count;
                     });
 
-                    // 整合數據為 App 格式
-                    const apiCarParks = infoList.map(cp => {
+                    const apiCarParks = (infoData.results || []).map(cp => {
                         return {
-                            id: cp.park_Id || Math.random().toString(),
-                            type: 'carpark',
-                            name: cp.name || '未命名停車場',
-                            lat: parseFloat(cp.latitude),
-                            lng: parseFloat(cp.longitude),
-                            isPublic: true, 
-                            isIndoor: true, // API 未必提供，先預設
-                            total: '-', 
+                            id: 'cp_' + cp.park_Id, type: 'carpark', name: cp.name || '未命名停車場',
+                            lat: parseFloat(cp.latitude), lng: parseFloat(cp.longitude),
+                            isPublic: true, isIndoor: true, total: '-', 
                             available: vacancyMap[cp.park_Id] !== undefined ? vacancyMap[cp.park_Id] : '未知'
                         };
                     }).filter(cp => !isNaN(cp.lat) && !isNaN(cp.lng));
 
-                    if(apiCarParks.length === 0) throw new Error('解析不到有效座標');
+                    // 2. 處理全港 18,000+ 咪錶數據
+                    const meterVacancies = parseCSV(await meterVacRes.text());
+                    const meterVacMap = {};
+                    meterVacancies.forEach(m => {
+                        const vals = Object.values(m);
+                        if(vals.length >= 2) meterVacMap[vals[0]] = vals[1]; // mapping SpaceID to Status
+                    });
 
-                    // 結合政府停車場與測試咪錶數據（因為咪錶通常在另一個封閉或格式不同的 API）
-                    allPoints = [...apiCarParks, ...MOCK_DATA.meters];
+                    const meters = parseCSV(await meterInfoRes.text());
+                    const streetSections = {};
+
+                    // 將咪錶以「街道段落」分組
+                    meters.forEach(m => {
+                        const lat = parseFloat(m.Latitude);
+                        const lng = parseFloat(m.Longitude);
+                        if(isNaN(lat) || isNaN(lng)) return;
+
+                        const sectionName = m.SectionOfStreet_tc || m.Street_tc || '未命名路段';
+                        const spaceId = m.ParkingSpaceId;
+                        const status = meterVacMap[spaceId] || 'O'; 
+                        const isVacant = (status === 'V' || status === 'Vacant' || status === '0') ? 1 : 0;
+
+                        if(!streetSections[sectionName]) {
+                            streetSections[sectionName] = {
+                                id: 'metersec_' + sectionName, type: 'meter', name: sectionName,
+                                latSum: 0, lngSum: 0, count: 0, available: 0, statusArray: []
+                            };
+                        }
+                        
+                        streetSections[sectionName].latSum += lat;
+                        streetSections[sectionName].lngSum += lng;
+                        streetSections[sectionName].count += 1;
+                        streetSections[sectionName].available += isVacant;
+                        streetSections[sectionName].statusArray.push(isVacant);
+                    });
+
+                    // 結算街道段落平均座標 (精準定位)
+                    const apiMeters = Object.values(streetSections).map(sec => {
+                        return {
+                            ...sec, lat: sec.latSum / sec.count, lng: sec.lngSum / sec.count
+                        };
+                    });
+
+                    // 將兩邊資料合併放入全局 Map
+                    allPointsMap.clear();
+                    [...apiCarParks, ...apiMeters].forEach(p => allPointsMap.set(p.id, p));
                     
                     uiManager.updateStatus('已實時更新', 'success');
-                    this.renderMarkersInBounds();
+                    this.renderAllMarkers();
 
                 } catch (error) {
-                    console.log('獲取 API 失敗，使用備用數據:', error);
-                    uiManager.updateStatus('離線 (未獲取數據)', 'error');
-                    allPoints = MOCK_DATA.meters; // 若出錯，退回只顯示假咪錶
-                    this.renderMarkersInBounds();
+                    console.log('獲取 API 失敗:', error);
+                    uiManager.updateStatus('連線失敗', 'error');
                 }
             },
 
-            renderMarkersInBounds() {
-                const bounds = map.getBounds();
+            renderAllMarkers() {
                 markersGroup.clearLayers();
+                const markers = []; // 一次性批量加入提升極大效能
 
-                const visiblePoints = allPoints.filter(p => bounds.contains([p.lat, p.lng]));
-
-                visiblePoints.forEach(point => {
+                allPointsMap.forEach((point, id) => {
                     const isMeter = point.type === 'meter';
                     const iconColor = isMeter ? '#3b82f6' : '#8b5cf6';
                     
@@ -428,24 +430,25 @@
                     });
 
                     const marker = L.marker([point.lat, point.lng], { icon: customIcon });
-                    const pointDataStr = encodeURIComponent(JSON.stringify(point));
                     let contentHtml = '';
 
                     if (isMeter) {
-                        const available = point.status.filter(s => s === 1).length;
-                        const blocks = point.status.map(s => `<div class="h-6 flex-1 rounded-sm ${s === 1 ? 'bg-green-400' : 'bg-red-400'}"></div>`).join('');
+                        const available = point.available;
+                        const blocks = point.statusArray.map(s => `<div class="h-6 flex-1 rounded-sm ${s === 1 ? 'bg-green-400' : 'bg-red-400'}"></div>`).join('');
                         contentHtml = `
-                            <div class="p-2 w-56">
+                            <div class="p-2 w-64 max-h-64 overflow-y-auto">
                                 <h3 class="font-bold text-lg mb-1 leading-tight">${point.name}</h3>
                                 <p class="text-xs text-gray-500 mb-3">路段咪錶 (共 ${point.count} 個)</p>
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="text-sm font-semibold">即時空位</span>
                                     <span class="text-lg font-bold ${available > 0 ? 'text-green-500' : 'text-red-500'}">${available} / ${point.count}</span>
                                 </div>
-                                <div class="flex space-x-1 w-full bg-gray-100 p-1 rounded-lg mb-4">${blocks}</div>
+                                <div class="flex flex-wrap gap-1 w-full bg-gray-100 p-2 rounded-lg mb-4">
+                                    ${blocks}
+                                </div>
                                 <div class="flex space-x-2">
                                     <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-500 text-white py-2 rounded-xl text-sm font-bold shadow-md"><i class="fa-solid fa-location-arrow mr-1"></i>導航</button>
-                                    <button onclick="uiManager.showSaveModal('${pointDataStr}')" class="w-10 bg-yellow-400 text-white py-2 rounded-xl text-sm shadow-md"><i class="fa-solid fa-star"></i></button>
+                                    <button onclick="uiManager.showSaveModal('${id}')" class="w-10 bg-yellow-400 text-white py-2 rounded-xl text-sm shadow-md"><i class="fa-solid fa-star"></i></button>
                                 </div>
                             </div>`;
                     } else {
@@ -466,14 +469,16 @@
                                 </div>
                                 <div class="flex space-x-2">
                                     <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-500 text-white py-2 rounded-xl text-sm font-bold shadow-md"><i class="fa-solid fa-location-arrow mr-1"></i>導航</button>
-                                    <button onclick="uiManager.showSaveModal('${pointDataStr}')" class="w-10 bg-yellow-400 text-white py-2 rounded-xl text-sm shadow-md"><i class="fa-solid fa-star"></i></button>
+                                    <button onclick="uiManager.showSaveModal('${id}')" class="w-10 bg-yellow-400 text-white py-2 rounded-xl text-sm shadow-md"><i class="fa-solid fa-star"></i></button>
                                 </div>
                             </div>`;
                     }
 
                     marker.bindPopup(contentHtml, { closeButton: true, minWidth: 240 });
-                    markersGroup.addLayer(marker);
+                    markers.push(marker);
                 });
+
+                markersGroup.addLayers(markers);
             },
 
             navigate(lat, lng) {
