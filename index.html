@@ -363,54 +363,35 @@ const database = {
 // 5. Data Fetching Engine (100% Native, No External Libraries)
 const engine = {
     async fetchCSV(url) {
-        try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
-            
-            // 讀取原始位元組並偵測編碼 (免疫政府資料的 UTF-16LE 陷阱)
-            const buffer = await res.arrayBuffer();
-            const view = new Uint8Array(buffer);
-            let text = '';
-            
-            if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
-                text = new TextDecoder('utf-16le').decode(buffer);
-            } else {
-                text = new TextDecoder('utf-8').decode(buffer);
-            }
-            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
-            // 100% 原生 CSV 解析器 (不依賴 PapaParse，免疫未引入 Library 錯誤)
-            const result = [];
-            let row = [], col = '', inQuotes = false;
-            
-            for (let i = 0; i < text.length; i++) {
-                let char = text[i];
-                if (char === '"') {
-                    if (inQuotes && text[i+1] === '"') { col += '"'; i++; } // 處理跳脫雙引號
-                    else { inQuotes = !inQuotes; }
-                } else if (char === ',' && !inQuotes) {
-                    row.push(col.trim()); col = '';
-                } else if (char === '\n' && !inQuotes) {
-                    row.push(col.trim()); result.push(row); row = []; col = '';
-                } else if (char !== '\r') {
-                    col += char;
-                }
-            }
-            if (col !== '' || row.length > 0) { row.push(col.trim()); result.push(row); }
-            
-            if (result.length < 2) throw new Error("CSV 內容為空或格式異常");
-            
-            // 統一標題格式 (全小寫、無空白)
-            const headers = result[0].map(h => h.toLowerCase().replace(/\s/g, ''));
-            
-            return result.slice(1).map(r => {
-                let obj = {};
-                headers.forEach((h, i) => { obj[h] = r[i] || ''; });
-                return obj;
-            });
-        } catch (error) {
-            throw error;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+        
+        const buffer = await res.arrayBuffer();
+        let view = new Uint8Array(buffer);
+        let text = '';
+        
+        // 智能偵測 UTF-16LE 與 UTF-8 (徹底破解政府隱形編碼陷阱)
+        if ((view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) || 
+            (view.length > 4 && view[1] === 0x00 && view[3] === 0x00)) {
+            text = new TextDecoder('utf-16le').decode(buffer);
+        } else {
+            text = new TextDecoder('utf-8').decode(buffer);
         }
+
+        // 終極淨化：移除 Null Bytes 與 BOM
+        text = text.replace(/\0/g, ''); 
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+        return new Promise((resolve, reject) => {
+            Papa.parse(text.trim(), {
+                header: true,
+                skipEmptyLines: true,
+                // 暴力淨化標題：移除所有非英數、非中文的字元，並轉小寫
+                transformHeader: h => h.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '').toLowerCase(),
+                complete: (results) => resolve(results.data),
+                error: (err) => reject(new Error("PapaParse 錯誤: " + err.message))
+            });
+        });
     },
 
     async loadCarparks() {
@@ -420,7 +401,7 @@ const engine = {
                 fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW')
             ]);
             
-            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API 連線失敗");
+            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API Failed");
 
             const infoData = await infoRes.json();
             const vacancyData = await vacRes.json();
@@ -450,7 +431,7 @@ const engine = {
             });
             return true;
         } catch (e) {
-            console.error('Carpark Error:', e);
+            console.error('Carpark Data Error:', e);
             throw e;
         }
     },
@@ -462,14 +443,17 @@ const engine = {
                 this.fetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
             ]);
 
+            if (!meterInfo || meterInfo.length === 0) throw new Error("下載成功，但檔案內無任何數據。");
+
+            // 建立實時空位對照表 (兼容中英文標題)
             const vacancyMap = new Map();
             meterVac.forEach(row => {
                 const keys = Object.keys(row);
-                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meter_id'));
-                const statusKey = keys.find(k => k.includes('occupancystatus') || k.includes('status'));
+                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meterid') || k.includes('編號'));
+                const statusKey = keys.find(k => k.includes('occupancy') || k.includes('status') || k.includes('狀態'));
                 
-                if (idKey && row[idKey]) {
-                    vacancyMap.set(row[idKey], row[statusKey]);
+                if (idKey && statusKey && row[idKey]) {
+                    vacancyMap.set(row[idKey].toString().trim(), row[statusKey]);
                 }
             });
 
@@ -478,22 +462,24 @@ const engine = {
             
             meterInfo.forEach(row => {
                 const keys = Object.keys(row);
-                const latKey = keys.find(k => k === 'latitude' || k.includes('lat'));
-                const lngKey = keys.find(k => k === 'longitude' || k.includes('long'));
-                const streetKey = keys.find(k => k.includes('sectionofstreet_tc') || k.includes('address'));
-                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meter_id'));
+                // 多語言與防呆比對
+                const latKey = keys.find(k => k.includes('lat') || k.includes('緯度'));
+                const lngKey = keys.find(k => k.includes('long') || k.includes('lng') || k.includes('經度'));
+                const streetKeys = keys.filter(k => k.includes('street') || k.includes('address') || k.includes('街道') || k.includes('路段'));
+                const streetKey = streetKeys.find(k => k.includes('tc') || k.includes('中文')) || streetKeys[0];
+                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meterid') || k.includes('編號'));
 
                 if (!latKey || !lngKey || !idKey) return;
 
                 const lat = parseFloat(row[latKey]);
                 const lng = parseFloat(row[lngKey]);
                 const spaceId = row[idKey];
-                const sectionName = (streetKey && row[streetKey]) ? row[streetKey] : '未命名路段';
+                const sectionName = (streetKey && row[streetKey]) ? row[streetKey].trim() : '未命名路段';
 
                 if (isNaN(lat) || isNaN(lng) || !spaceId) return;
 
                 validCount++;
-                const status = vacancyMap.get(spaceId) || 'O';
+                const status = vacancyMap.get(spaceId.toString().trim()) || 'O';
                 const isVacant = (status === 'V' || status.toString().toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
 
                 const sectionId = 'metersec_' + sectionName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
@@ -513,7 +499,12 @@ const engine = {
                 sec.statusArray.push(isVacant);
             });
 
-            if(validCount === 0) throw new Error("成功解析檔案，但未找到任何有效的座標數據");
+            // 【終極診斷器】如果全部失敗，印出第一筆資料的真實標題！
+            if (validCount === 0) {
+                const sampleKeys = Object.keys(meterInfo[0]).join(', ');
+                const sampleValues = Object.values(meterInfo[0]).slice(0, 3).join(', ');
+                throw new Error(`【診斷報告】\n無法識別欄位名稱。\n\n系統讀取到的標題為:\n[ ${sampleKeys} ]\n\n系統讀取到的前三個數值為:\n[ ${sampleValues} ]`);
+            }
 
             streetSections.forEach(sec => {
                 sec.lat = sec.latSum / sec.count;
@@ -524,8 +515,7 @@ const engine = {
             return true;
         } catch (e) {
             console.error('Meter Data Error:', e);
-            // 加入彈出視窗：如果失敗，直接告訴我們原因！
-            alert('咪錶載入失敗，錯誤細節：\n' + e.message);
+            alert(`咪錶載入失敗，錯誤細節：\n\n${e.message}\n\n請將這段文字告訴我！`);
             throw e; 
         }
     },
