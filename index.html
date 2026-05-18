@@ -3,429 +3,700 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#ffffff">
-    <title>HKRoadMate | 香港泊車及咪錶實時地圖</title>
+    <meta name="theme-color" content="#fdfbfb">
+    <title>HKRoadMate | 香港停車位實時地圖</title>
 
-    <link rel="manifest" href='data:application/manifest+json,{"name":"HKRoadMate","short_name":"RoadMate","display":"standalone","background_color":"#ffffff","start_url":"."}'>
+    <link rel="manifest" href='data:application/manifest+json,{"name":"HKRoadMate","short_name":"RoadMate","display":"standalone","background_color":"#ffffff"}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Map_marker_icon_%E2%80%93_Nicolas_Mollet_%E2%80%93_Parking_%E2%80%93_Transportation_%E2%80%93_Classic.png/256px-Map_marker_icon.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
+        /* HKRoadMate: iOS 26 Liquid Glass Design System */
         :root {
-            --glass-white: rgba(255, 255, 255, 0.72);
-            --liquid-blue: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
         }
+
         body {
             margin: 0; padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
-            background: #f2f2f7;
-            overflow: hidden; height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            overflow: hidden; height: 100vh; width: 100vw;
+            -webkit-tap-highlight-color: transparent;
         }
-        .liquid-glass {
-            background: var(--glass-white);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 0.5px solid rgba(255,255,255,0.4);
-        }
-        #map { height: calc(100vh - 85px); width: 100%; position: absolute; top: 0; z-index: 1; }
-        
-        /* 底部導航 & 視圖切換 */
-        .view-content { display: none; height: calc(100vh - 85px); overflow-y: auto; z-index: 10; position: relative; background: #f2f2f7; padding-top: 20px; }
-        .view-content.active { display: block; }
-        #map-view.active { display: block; background: transparent; }
 
-        /* Leaflet Popup Customization */
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+
+        .glass-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+        }
+
+        /* Map Structure */
+        #map-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: calc(100vh - 85px); z-index: 10;
+        }
+
+        /* Filter Bar Floating over Map */
+        .map-filter-bar {
+            position: absolute; top: calc(env(safe-area-inset-top) + 85px); left: 50%;
+            transform: translateX(-50%); z-index: 30;
+        }
+
+        /* Leaflet Overrides for Liquid Glass */
         .leaflet-popup-content-wrapper {
-            border-radius: 24px !important;
-            padding: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+            border-radius: 1.5rem !important;
         }
-        .leaflet-container a.leaflet-popup-close-button { font-size: 20px; padding: 12px; color: #8e8e93; }
+        .leaflet-popup-tip { background: rgba(255, 255, 255, 0.95) !important; }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #9ca3af; padding: 16px; font-weight: bold; width: 34px; height: 34px;
+        }
 
-        /* MarkerCluster Styling */
-        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background-color: rgba(0, 122, 255, 0.15); }
-        .marker-cluster div { background-color: rgba(0, 122, 255, 0.85); color: white; font-weight: bold; border: 3px solid white; }
+        /* MarkerCluster Overrides */
+        .marker-cluster {
+            background-clip: padding-box; border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .marker-cluster div {
+            width: 36px; height: 36px; margin: 2px;
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            backdrop-filter: blur(10px); border: 2px solid white;
+            color: #1e3a8a !important; font-weight: 800; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
 
-        .safe-bottom { padding-bottom: calc(85px + env(safe-area-inset-bottom)); }
-        .interactive-scale:active { transform: scale(0.96); transition: 0.1s; }
+        /* View Management */
+        .view-section {
+            display: none; height: calc(100vh - 85px); overflow-y: auto; position: absolute;
+            top: 0; width: 100%; z-index: 20; padding-top: calc(env(safe-area-inset-top) + 80px);
+            padding-bottom: 40px;
+        }
+        .view-section.active { display: block; }
+        #map-view.active { display: block; z-index: 10; padding: 0; }
+
+        .interactive-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        .interactive-btn:active { transform: scale(0.95); opacity: 0.8; }
+        ::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body>
+<body class="text-gray-800 antialiased selection:bg-blue-300">
 
-    <header class="fixed top-0 w-full liquid-glass z-[100] px-6 pt-[max(env(safe-area-inset-top),1rem)] pb-4 flex justify-between items-center rounded-b-[2.5rem] shadow-sm">
-        <div>
-            <h1 class="text-2xl font-black tracking-tight text-slate-900">HKRoadMate</h1>
-            <p id="conn-status" class="text-[10px] font-bold text-orange-500 uppercase flex items-center">
-                <span class="w-2 h-2 rounded-full bg-orange-500 mr-1.5 animate-pulse"></span> 初始化數據庫...
-            </p>
-        </div>
-        <div class="flex space-x-2">
-            <button onclick="app.refreshData()" class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-blue-600 interactive-scale">
-                <i class="fa-solid fa-rotate"></i>
-            </button>
+    <header class="fixed top-0 w-full glass-header z-40 px-5 py-3 pt-[max(env(safe-area-inset-top),0.75rem)] flex justify-between items-center rounded-b-[2rem]">
+        <h1 class="text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center">
+            <i class="fa-solid fa-location-arrow mr-2 text-blue-500"></i>HKRoadMate
+        </h1>
+        <div id="status-indicator" class="flex items-center text-xs font-bold px-3 py-1.5 rounded-full bg-white shadow-sm border border-gray-100 transition-all duration-300">
+            <span class="w-2.5 h-2.5 rounded-full mr-2 shadow-inner bg-yellow-400 animate-pulse" id="status-dot"></span>
+            <span id="status-text" class="text-gray-600">連線中...</span>
         </div>
     </header>
 
-    <main id="map-view" class="view-content active">
-        <div class="fixed top-24 left-1/2 -translate-x-1/2 z-[50] flex bg-white/80 backdrop-blur-lg p-1.5 rounded-full shadow-lg border border-white/50">
-            <button onclick="app.filter('all')" id="f-all" class="px-5 py-2 rounded-full text-xs font-bold transition-all bg-blue-600 text-white">全部</button>
-            <button onclick="app.filter('carpark')" id="f-carpark" class="px-5 py-2 rounded-full text-xs font-bold transition-all text-slate-500">停車場</button>
-            <button onclick="app.filter('meter')" id="f-meter" class="px-5 py-2 rounded-full text-xs font-bold transition-all text-slate-500">咪錶</button>
+    <main id="map-view" class="view-section active">
+        <div class="map-filter-bar glass-panel rounded-full p-1 flex space-x-1 shadow-lg border border-white">
+            <button onclick="app.setFilter('all')" id="filter-all" class="filter-btn px-4 py-1.5 rounded-full text-sm font-bold bg-blue-500 text-white shadow-sm transition-all">全部</button>
+            <button onclick="app.setFilter('carpark')" id="filter-carpark" class="filter-btn px-4 py-1.5 rounded-full text-sm font-bold text-gray-500 hover:bg-white/50 transition-all">停車場</button>
+            <button onclick="app.setFilter('meter')" id="filter-meter" class="filter-btn px-4 py-1.5 rounded-full text-sm font-bold text-gray-500 hover:bg-white/50 transition-all">咪錶</button>
         </div>
-        <div id="map"></div>
+        <div id="map-container"></div>
     </main>
 
-    <main id="list-view" class="view-content px-6 safe-bottom">
-        <div class="flex justify-between items-end mb-6 mt-20">
-            <h2 class="text-3xl font-black text-slate-900">收藏地標</h2>
-            <button onclick="ui.openModal('create-list')" class="text-blue-600 font-bold text-sm">新增清單</button>
+    <main id="list-view" class="view-section px-5 bg-gradient-to-b from-transparent to-gray-50/50">
+        <div class="flex justify-between items-center mb-6 pt-2">
+            <h2 class="text-3xl font-black text-gray-800 tracking-tight">我的收藏</h2>
+            <button onclick="ui.openModal('create-list-modal')" class="glass-panel px-4 py-2 rounded-2xl text-blue-600 font-bold shadow-sm interactive-btn">
+                <i class="fa-solid fa-folder-plus mr-1"></i> 新增
+            </button>
         </div>
-        <div id="lists-render" class="space-y-6"></div>
+        <div id="lists-container" class="space-y-6 pb-20"></div>
     </main>
 
-    <nav class="fixed bottom-0 w-full liquid-glass h-[85px] z-[100] px-10 pb-[env(safe-area-inset-bottom)] flex justify-around items-center rounded-t-[2.5rem]">
-        <button onclick="ui.switchTab('map')" id="nav-map" class="flex flex-col items-center text-blue-600">
-            <i class="fa-solid fa-map-location-dot text-2xl mb-1"></i>
-            <span class="text-[10px] font-bold">地圖探索</span>
-        </button>
-        <button onclick="ui.switchTab('list')" id="nav-list" class="flex flex-col items-center text-slate-400">
-            <i class="fa-solid fa-star text-2xl mb-1"></i>
-            <span class="text-[10px] font-bold">收藏項目</span>
-        </button>
+    <nav class="fixed bottom-0 w-full glass-header pb-[env(safe-area-inset-bottom)] z-40 rounded-t-[2.5rem]">
+        <div class="flex justify-around items-center h-[85px] px-8">
+            <button onclick="ui.switchTab('map')" id="tab-map" class="flex flex-col items-center justify-center w-20 text-blue-600 font-black interactive-btn">
+                <i class="fa-solid fa-map-location-dot text-2xl mb-1.5 drop-shadow-sm"></i>
+                <span class="text-[11px] tracking-wider">地圖尋位</span>
+            </button>
+            <button onclick="ui.switchTab('list')" id="tab-list" class="flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn">
+                <i class="fa-solid fa-bookmark text-2xl mb-1.5"></i>
+                <span class="text-[11px] tracking-wider">收藏清單</span>
+            </button>
+        </div>
     </nav>
 
-    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] hidden opacity-0 transition-opacity duration-300 items-center justify-center">
-        <div id="modal-card" class="bg-white/90 w-[85%] max-w-sm rounded-[3rem] p-8 shadow-2xl scale-90 transition-transform duration-300">
+    <div id="save-modal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-md z-50 flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-[90%] max-w-sm rounded-[2rem] p-6 transform scale-95 transition-transform duration-300 bg-white/90" id="save-modal-content">
+            <h3 class="text-xl font-black mb-5 text-gray-800 flex items-center"><i class="fa-solid fa-star text-yellow-400 mr-2"></i> 儲存至清單</h3>
+            <div id="modal-lists-wrapper" class="space-y-3 max-h-64 overflow-y-auto mb-5 p-1 custom-scrollbar"></div>
+            <button onclick="ui.closeModal('save-modal')" class="w-full py-3.5 rounded-2xl bg-gray-100/80 text-gray-600 font-bold interactive-btn text-base border border-gray-200">取消</button>
+        </div>
+    </div>
+
+    <div id="create-list-modal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-md z-50 flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-[90%] max-w-sm rounded-[2rem] p-6 transform scale-95 transition-transform duration-300 bg-white/90" id="create-list-modal-content">
+            <h3 class="text-xl font-black mb-5 text-gray-800">建立新清單</h3>
+            <input type="text" id="new-list-name" placeholder="例如：觀塘工業區" class="w-full bg-white/80 border border-gray-200 px-5 py-4 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 shadow-inner placeholder-gray-400">
+            <div class="flex space-x-3">
+                <button onclick="ui.closeModal('create-list-modal')" class="flex-1 py-3.5 rounded-2xl bg-gray-100/80 text-gray-600 font-bold interactive-btn text-base border border-gray-200">取消</button>
+                <button onclick="database.createList()" class="flex-1 py-3.5 rounded-2xl bg-blue-600 text-white font-bold shadow-md interactive-btn text-base">建立</button>
             </div>
+        </div>
     </div>
 
 <script>
 /**
- * HKRoadMate Core Logic
+ * HKRoadMate - Professional Core System
  */
 
+// 1. Global State
 const STATE = {
     map: null,
-    cluster: null,
-    data: new Map(),
-    currentFilter: 'all',
-    activeTab: 'map',
-    isSimulation: false
+    markersGroup: null,
+    allPointsMap: new Map(), // Stores raw data
+    itemToSave: null,
+    currentFilter: 'all' // 'all', 'carpark', 'meter'
 };
 
-const UI_CONFIG = {
-    carparkIcon: L.divIcon({
-        className: '',
-        html: `<div class="w-10 h-10 bg-blue-600 rounded-full border-4 border-white shadow-lg flex items-center justify-center text-white"><i class="fa-solid fa-p text-xl"></i></div>`,
-        iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
+// 2. High-Performance Icons
+const createIconHTML = (iconClass, bgColor) => `
+    <div class="bg-white rounded-full p-1 shadow-md border border-gray-100/50">
+        <div class="${bgColor} w-9 h-9 rounded-full shadow-inner flex items-center justify-center">
+            <i class="fa-solid ${iconClass} text-white text-lg"></i>
+        </div>
+    </div>`;
+
+const ICONS = {
+    meter: L.divIcon({
+        className: 'custom-icon',
+        html: createIconHTML('fa-square-parking', 'bg-emerald-500'),
+        iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -22]
     }),
-    meterIcon: L.divIcon({
-        className: '',
-        html: `<div class="w-10 h-10 bg-emerald-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center text-white"><i class="fa-solid fa-gauge-high text-lg"></i></div>`,
-        iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
+    carpark: L.divIcon({
+        className: 'custom-icon',
+        html: createIconHTML('fa-car', 'bg-blue-600'),
+        iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -22]
     })
 };
 
-// 數據抓取引擎
-const DataEngine = {
-    // 跨域跳板清單
-    proxies: [
-        url => url, // 直接抓取
-        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`
-    ],
+// 3. UI Controller
+const ui = {
+    setStatus(msg, statusType) {
+        const text = document.getElementById('status-text');
+        const dot = document.getElementById('status-dot');
+        text.innerText = msg;
+        
+        dot.className = 'w-2.5 h-2.5 rounded-full mr-2 shadow-inner ';
+        if(statusType === 'loading') dot.className += 'bg-yellow-400 animate-pulse';
+        else if(statusType === 'success') dot.className += 'bg-green-500';
+        else if(statusType === 'warning') dot.className += 'bg-orange-500';
+        else dot.className += 'bg-red-500';
+    },
+    switchTab(tabId) {
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${tabId}-view`).classList.add('active');
 
-    async smartFetchCSV(url) {
-        let lastError = null;
-        for (const proxyFn of this.proxies) {
-            try {
-                const res = await fetch(proxyFn(url));
-                if (!res.ok) continue;
-                const text = await res.text();
-                return new Promise(resolve => {
-                    Papa.parse(text.trim(), {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: (results) => {
-                            // 清洗 Key 名稱：去除不可見字符並轉小寫
-                            const cleanData = results.data.map(row => {
-                                const newRow = {};
-                                Object.keys(row).forEach(k => {
-                                    const cleanK = k.replace(/[^\x20-\x7E]/g, '').trim().toLowerCase();
-                                    newRow[cleanK] = row[k];
-                                });
-                                return newRow;
-                            });
-                            resolve(cleanData);
-                        }
-                    });
-                });
-            } catch (e) { lastError = e; }
+        document.getElementById('tab-map').className = "flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn";
+        document.getElementById('tab-list').className = "flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn";
+
+        const activeTab = document.getElementById(`tab-${tabId}`);
+        activeTab.classList.replace('text-gray-400', 'text-blue-600');
+        activeTab.classList.replace('font-bold', 'font-black');
+
+        if (tabId === 'map' && STATE.map) {
+            setTimeout(() => STATE.map.invalidateSize(), 100);
+        } else if (tabId === 'list') {
+            database.renderView();
         }
-        throw lastError;
+    },
+    openModal(id, dataId = null) {
+        if (dataId) STATE.itemToSave = STATE.allPointsMap.get(dataId);
+
+        if (id === 'save-modal') {
+            const wrapper = document.getElementById('modal-lists-wrapper');
+            wrapper.innerHTML = database.get().map(l => `
+                <button onclick="database.saveItem('${l.id}')" class="w-full text-left px-5 py-4 bg-white/60 rounded-2xl flex justify-between items-center interactive-btn shadow-sm border border-gray-100 mb-2 hover:bg-white">
+                    <span class="font-bold text-gray-800">${l.name}</span> 
+                    <i class="fa-solid fa-plus text-blue-600 bg-blue-50 w-7 h-7 flex items-center justify-center rounded-full"></i>
+                </button>`).join('');
+        }
+
+        const modal = document.getElementById(id);
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        document.getElementById(`${id}-content`).classList.remove('scale-95');
+        if (id === 'create-list-modal') setTimeout(() => document.getElementById('new-list-name').focus(), 100);
+    },
+    closeModal(id) {
+        document.getElementById(id).classList.add('opacity-0', 'pointer-events-none');
+        document.getElementById(`${id}-content`).classList.add('scale-95');
+    }
+};
+
+// 4. Local Database Controller
+const database = {
+    get() {
+        const data = localStorage.getItem('hkRoadMate_V2');
+        return data ? JSON.parse(data) : [{ id: 'default', name: '預設收藏', items: [] }];
+    },
+    set(data) {
+        localStorage.setItem('hkRoadMate_V2', JSON.stringify(data));
+        this.renderView();
+    },
+    createList() {
+        const input = document.getElementById('new-list-name');
+        const name = input.value.trim();
+        if (!name) return;
+        const data = this.get();
+        data.push({ id: 'list_' + Date.now(), name, items: [] });
+        this.set(data);
+        input.value = '';
+        ui.closeModal('create-list-modal');
+    },
+    deleteList(listId) {
+        if(listId === 'default') return alert("預設清單無法刪除");
+        if(confirm("確定要刪除整個清單嗎？")) {
+            this.set(this.get().filter(l => l.id !== listId));
+        }
+    },
+    saveItem(listId) {
+        if (!STATE.itemToSave) return;
+        const data = this.get();
+        const list = data.find(l => l.id === listId);
+        if (list) {
+            if(!list.items.find(i => i.id === STATE.itemToSave.id)) {
+                // Save a snapshot of the item
+                list.items.push(STATE.itemToSave);
+                this.set(data);
+                ui.closeModal('save-modal');
+                // Optional: show a small toast instead of alert for better UX
+            } else {
+                alert('此地點已在清單中。');
+            }
+        }
+    },
+    removeItem(listId, itemId) {
+        const data = this.get();
+        const list = data.find(l => l.id === listId);
+        if(list) {
+            list.items = list.items.filter(i => i.id !== itemId);
+            this.set(data);
+        }
+    },
+    renderView() {
+        const container = document.getElementById('lists-container');
+        const lists = this.get();
+        container.innerHTML = '';
+
+        if(lists.length === 0) return container.innerHTML = '<div class="text-center text-gray-400 mt-12 font-bold">尚無任何收藏</div>';
+
+        lists.forEach(list => {
+            let itemsHtml = list.items.length === 0 
+                ? '<p class="text-sm text-gray-400 italic px-2 py-2">尚未添加任何地點</p>' 
+                : list.items.map(item => {
+                    // Try to fetch fresh live data, fallback to saved snapshot
+                    const liveData = STATE.allPointsMap.get(item.id);
+                    const displayItem = liveData || item;
+                    
+                    const availVal = displayItem.available;
+                    const availColor = availVal > 0 ? 'text-emerald-500' : (availVal === 0 ? 'text-red-500' : 'text-gray-400');
+                    const iconType = displayItem.type === 'carpark' 
+                        ? '<i class="fa-solid fa-car text-blue-500 bg-blue-50 p-2 rounded-lg mr-3"></i>'
+                        : '<i class="fa-solid fa-square-parking text-emerald-500 bg-emerald-50 p-2 rounded-lg mr-3"></i>';
+
+                    return `
+                    <div class="bg-white/80 p-3.5 rounded-2xl flex justify-between items-center mb-3 shadow-sm border border-gray-100 interactive-btn" onclick="app.flyTo(${displayItem.lat}, ${displayItem.lng})">
+                        <div class="flex items-center flex-1 pr-2">
+                            ${iconType}
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-sm leading-tight mb-1 truncate max-w-[160px]">${displayItem.name}</h4>
+                                <span class="text-[10px] font-bold text-gray-400">${displayItem.type === 'carpark' ? '停車場' : '路段咪錶'}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-right">
+                                <span class="block text-[9px] text-gray-400 font-bold mb-0.5 uppercase tracking-wide">空位</span>
+                                <span class="font-black text-lg leading-none ${availColor}">${availVal}</span>
+                            </div>
+                            <button onclick="event.stopPropagation(); database.removeItem('${list.id}', '${displayItem.id}')" class="text-red-400 bg-red-50/50 w-8 h-8 rounded-full flex items-center justify-center interactive-btn hover:bg-red-100 transition-colors">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('');
+
+            container.innerHTML += `
+            <div class="glass-panel rounded-[2rem] p-5 relative overflow-hidden mb-5">
+                <div class="flex justify-between items-center mb-4 pl-1">
+                    <h3 class="text-lg font-black text-gray-800">${list.name} <span class="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full ml-1 align-middle">${list.items.length}</span></h3>
+                    ${list.id !== 'default' ? `<button onclick="database.deleteList('${list.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-xmark text-lg"></i></button>` : ''}
+                </div>
+                <div class="space-y-1">${itemsHtml}</div>
+            </div>`;
+        });
+    }
+};
+
+// 5. Data Fetching Engine (Robust Fallback & Parsing)
+const engine = {
+    fetchCSV(url) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                
+                // 【核心解法】不直接轉為文字，改取原始位元組 (ArrayBuffer)
+                const buffer = await res.arrayBuffer();
+                const view = new Uint8Array(buffer);
+                let text = '';
+                
+                // 動態偵測檔案編碼 (精準破解 HK Gov 的 UTF-16LE 陷阱)
+                if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
+                    text = new TextDecoder('utf-16le').decode(buffer);
+                } else if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
+                    text = new TextDecoder('utf-8').decode(buffer);
+                } else {
+                    text = new TextDecoder('utf-8').decode(buffer); // 預設降級
+                }
+
+                // 強制移除字首殘留的零寬度空白 (BOM)
+                if (text.charCodeAt(0) === 0xFEFF) {
+                    text = text.slice(1);
+                }
+
+                Papa.parse(text.trim(), {
+                    header: true,
+                    skipEmptyLines: true,
+                    // 強制統一標題格式：去頭尾空白、轉小寫、去引號、去所有中間空白
+                    transformHeader: h => h.replace(/"/g, '').trim().toLowerCase().replace(/\s/g, ''),
+                    complete: (results) => resolve(results.data),
+                    error: (err) => reject(new Error("PapaParse 錯誤: " + err.message))
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
     },
 
     async loadCarparks() {
         try {
-            const [info, vac] = await Promise.all([
-                fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=info&lang=zh_TW').then(r => r.json()),
-                fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW').then(r => r.json())
+            const [infoRes, vacRes] = await Promise.all([
+                fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=info&lang=zh_TW'),
+                fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW')
             ]);
-            const vacMap = new Map();
-            (vac.results || []).forEach(v => {
-                let vCount = 0;
-                if(v.privateCar) vCount = v.privateCar.reduce((s, c) => s + (parseInt(c.vacancy) || 0), 0);
-                vacMap.set(v.park_Id, vCount < 0 ? 0 : vCount);
+            
+            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API Failed");
+
+            const infoData = await infoRes.json();
+            const vacancyData = await vacRes.json();
+
+            const vacancyMap = new Map();
+            (vacancyData.results || []).forEach(v => {
+                let count = 0;
+                if(v.privateCar && v.privateCar.length > 0) {
+                    count = v.privateCar.reduce((sum, pc) => sum + (parseInt(pc.vacancy) || 0), 0);
+                }
+                vacancyMap.set(v.park_Id, count < 0 ? 0 : count);
             });
-            info.results.forEach(cp => {
-                const id = `cp_${cp.park_Id}`;
-                STATE.data.set(id, {
-                    id, type: 'carpark', name: cp.name,
-                    lat: parseFloat(cp.latitude), lng: parseFloat(cp.longitude),
-                    available: vacMap.has(cp.park_Id) ? vacMap.get(cp.park_Id) : 'N/A',
-                    address: cp.address
+
+            let added = 0;
+            (infoData.results || []).forEach(cp => {
+                const lat = parseFloat(cp.latitude);
+                const lng = parseFloat(cp.longitude);
+                if(isNaN(lat) || isNaN(lng)) return;
+
+                const id = 'cp_' + cp.park_Id;
+                STATE.allPointsMap.set(id, {
+                    id, type: 'carpark', name: cp.name || '政府數據停車場',
+                    lat, lng, isPublic: true, isIndoor: true, total: '-',
+                    available: vacancyMap.has(cp.park_Id) ? vacancyMap.get(cp.park_Id) : '未知'
                 });
+                added++;
             });
+            if(added === 0) throw new Error("No carpark data parsed");
             return true;
-        } catch (e) { return false; }
+        } catch (e) {
+            console.error('Carpark Data Error:', e);
+            throw e;
+        }
     },
 
     async loadMeters() {
         try {
-            // 抓取靜態位置與動態狀態
-            const [mPoints, mStatus] = await Promise.all([
-                this.smartFetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/spaceinfo/parkingspaces.csv'),
-                this.smartFetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
+            const [meterInfo, meterVac] = await Promise.all([
+                this.fetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/spaceinfo/parkingspaces.csv'),
+                this.fetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
             ]);
 
-            const statusMap = new Map();
-            mStatus.forEach(s => {
-                const sid = s.parkingspaceid || s.spaceid;
-                const stat = s.occupancystatus || s.status;
-                if(sid) statusMap.set(sid.toString().trim(), stat);
+            if (!meterInfo || meterInfo.length === 0) throw new Error("Meter CSV is empty or failed to decode.");
+
+            // 1. 建立空位對照表 (Vacancy Map)
+            const vacancyMap = new Map();
+            meterVac.forEach(row => {
+                // 經過 transformHeader 淨化，鍵名絕對是小寫無空白
+                const spaceId = row['parkingspaceid'] || row['space_id'] || row['meter_id'];
+                const status = row['occupancystatus'] || row['status'];
+                if (spaceId) {
+                    vacancyMap.set(spaceId.toString().trim(), status);
+                }
             });
 
-            const sections = new Map();
-            mPoints.forEach(p => {
-                const lat = parseFloat(p.latitude || p.lat);
-                const lng = parseFloat(p.longitude || p.long);
-                const sid = (p.parkingspaceid || p.spaceid || '').toString().trim();
-                const street = p.sectionofstreet_tc || p.street_tc || '未知路段';
+            // 2. 將獨立咪錶按路段群組化
+            const streetSections = new Map();
+            let validCount = 0;
+            
+            meterInfo.forEach(row => {
+                const lat = parseFloat(row['latitude'] || row['lat']);
+                const lng = parseFloat(row['longitude'] || row['long'] || row['lng']);
+                const sectionName = row['sectionofstreet_tc'] || row['street_tc'] || row['address'] || '未命名路段';
+                const spaceId = row['parkingspaceid'] || row['space_id'] || row['meter_id'];
+
+                if (isNaN(lat) || isNaN(lng) || !spaceId) return;
+
+                validCount++;
+                const status = vacancyMap.get(spaceId.toString().trim()) || 'O';
+                // 政府數據中 'V' 或 'Vacant' 代表空置
+                const isVacant = (status === 'V' || status.toString().toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
+
+                const sectionId = 'metersec_' + sectionName.replace(/\s/g, '');
                 
-                if(isNaN(lat) || !sid) return;
-
-                const isVacant = (statusMap.get(sid) === '0' || statusMap.get(sid) === 'V') ? 1 : 0;
-
-                if(!sections.has(street)) {
-                    sections.set(street, { 
-                        id: `meter_${street}`, type: 'meter', name: street,
-                        latSum: 0, lngSum: 0, count: 0, available: 0, 
-                        details: [] 
+                if (!streetSections.has(sectionId)) {
+                    streetSections.set(sectionId, {
+                        id: sectionId,
+                        type: 'meter', name: sectionName,
+                        latSum: 0, lngSum: 0, count: 0, available: 0, statusArray: []
                     });
                 }
-                const sec = sections.get(street);
-                sec.latSum += lat; sec.lngSum += lng; sec.count++;
+
+                const sec = streetSections.get(sectionId);
+                sec.latSum += lat;
+                sec.lngSum += lng;
+                sec.count += 1;
                 sec.available += isVacant;
-                sec.details.push(isVacant);
+                sec.statusArray.push(isVacant);
             });
 
-            sections.forEach(sec => {
+            if(validCount === 0) throw new Error("No valid meter coordinates found after parsing.");
+
+            // 3. 計算路段中心點並加入地圖數據庫
+            streetSections.forEach(sec => {
                 sec.lat = sec.latSum / sec.count;
                 sec.lng = sec.lngSum / sec.count;
-                STATE.data.set(sec.id, sec);
+                STATE.allPointsMap.set(sec.id, sec);
             });
+            
             return true;
-        } catch (e) { 
-            console.error("Meter Load Failed:", e);
-            return false; 
+        } catch (e) {
+            console.error('Meter Data Error Details:', e);
+            throw e; // 將錯誤拋出以觸發適當的 UI 狀態
         }
     },
-
-    loadSimulation() {
-        STATE.isSimulation = true;
-        const mock = [
-            { id: 's1', type: 'carpark', name: '[模擬] 尖沙咀海港城', lat: 22.296, lng: 114.167, available: 15 },
-            { id: 's2', type: 'carpark', name: '[模擬] 銅鑼灣時代廣場', lat: 22.278, lng: 114.182, available: 0 },
-            { id: 's3', type: 'meter', name: '[模擬] 旺角砵蘭街', lat: 22.318, lng: 114.169, count: 6, available: 2, details: [1,0,0,1,0,0] }
-        ];
-        mock.forEach(m => STATE.data.set(m.id, m));
+    
+    loadMockData(type = 'all') {
+        const mocks = [];
+        if(type === 'all' || type === 'carpark') {
+            mocks.push(
+                { id: 'm_cp1', type: 'carpark', name: '[模擬] 時代廣場停車場', lat: 22.2782, lng: 114.1823, available: 45 },
+                { id: 'm_cp2', type: 'carpark', name: '[模擬] 海港城停車場', lat: 22.2965, lng: 114.1678, available: 12 },
+                { id: 'm_cp3', type: 'carpark', name: '[模擬] 朗豪坊停車場', lat: 22.3183, lng: 114.1679, available: 0 },
+                { id: 'm_cp4', type: 'carpark', name: '[模擬] APM 停車場', lat: 22.3121, lng: 114.2250, available: 88 },
+                { id: 'm_cp5', type: 'carpark', name: '[模擬] IFC 停車場', lat: 22.2849, lng: 114.1583, available: 5 }
+            );
+        }
+        if(type === 'all' || type === 'meter') {
+            mocks.push(
+                { id: 'm_m1', type: 'meter', name: '[模擬] 彌敦道 (旺角段)', lat: 22.3193, lng: 114.1694, count: 8, available: 3, statusArray: [1,0,0,1,0,0,1,0] },
+                { id: 'm_m2', type: 'meter', name: '[模擬] 干諾道中', lat: 22.2828, lng: 114.1589, count: 5, available: 0, statusArray: [0,0,0,0,0] },
+                { id: 'm_m3', type: 'meter', name: '[模擬] 軒尼詩道', lat: 22.2795, lng: 114.1755, count: 6, available: 6, statusArray: [1,1,1,1,1,1] },
+                { id: 'm_m4', type: 'meter', name: '[模擬] 漆咸道南', lat: 22.2985, lng: 114.1751, count: 10, available: 2, statusArray: [0,0,1,0,0,0,1,0,0,0] },
+                { id: 'm_m5', type: 'meter', name: '[模擬] 渣華道', lat: 22.2922, lng: 114.2014, count: 4, available: 1, statusArray: [0,1,0,0] }
+            );
+        }
+        mocks.forEach(m => STATE.allPointsMap.set(m.id, m));
     }
 };
 
+// 6. Main App Controller
 const app = {
     async init() {
         this.initMap();
-        await this.refreshData();
+
+        // 獨立抓取：即使一個失敗，另一個依然能運作，絕不影響正常數據
+        const results = await Promise.allSettled([
+            engine.loadCarparks(),
+            engine.loadMeters()
+        ]);
+
+        const carparkSuccess = results[0].status === 'fulfilled';
+        const meterSuccess = results[1].status === 'fulfilled';
+
+        // 僅當兩者都完全失效時，才載入全面的 Mock 數據做 UI 展示
+        if (!carparkSuccess && !meterSuccess) {
+            ui.setStatus('系統離線 - 進入模擬展示模式', 'warning');
+            engine.loadMockData('all');
+        } else {
+            let msg = `已載入 `;
+            msg += carparkSuccess ? '停車場 ' : '';
+            msg += meterSuccess ? '路段咪錶' : '';
+            if(!carparkSuccess || !meterSuccess) {
+                 msg += ` (部分伺服器連線失敗)`;
+                 ui.setStatus(msg, 'warning');
+            } else {
+                 ui.setStatus(msg, 'success');
+            }
+        }
+
+        document.getElementById('status-dot').classList.remove('animate-pulse');
+        this.renderMap();
+        database.renderView();
     },
 
     initMap() {
-        STATE.map = L.map('map', { zoomControl: false, attributionControl: false }).setView([22.31, 114.17], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(STATE.map);
-        STATE.cluster = L.markerClusterGroup({ disableClusteringAtZoom: 17 }).addTo(STATE.map);
-    },
+        STATE.map = L.map('map-container', { zoomControl: false, tap: true }).setView([22.3100, 114.1700], 13);
+        L.control.zoom({ position: 'bottomright' }).addTo(STATE.map);
 
-    async refreshData() {
-        const statusEl = document.getElementById('conn-status');
-        statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-orange-500 mr-1.5 animate-pulse"></span> 正在連線政府伺服器...`;
-        
-        STATE.data.clear();
-        const cpOk = await DataEngine.loadCarparks();
-        const mtOk = await DataEngine.loadMeters();
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap | HKRoadMate', maxZoom: 19
+        }).addTo(STATE.map);
 
-        if (!cpOk && !mtOk) {
-            DataEngine.loadSimulation();
-            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span> 伺服器離線 (模擬模式)`;
-            statusEl.classList.replace('text-orange-500', 'text-red-500');
-        } else {
-            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span> 數據已更新: ${cpOk?'停車場 OK ':''}${mtOk?'咪錶 OK':''}`;
-            statusEl.classList.replace('text-orange-500', 'text-green-500');
-        }
-        this.render();
-    },
-
-    filter(type) {
-        STATE.currentFilter = type;
-        ['all', 'carpark', 'meter'].forEach(t => {
-            const el = document.getElementById(`f-${t}`);
-            el.className = t === type ? 'px-5 py-2 rounded-full text-xs font-bold transition-all bg-blue-600 text-white shadow-md' : 'px-5 py-2 rounded-full text-xs font-bold transition-all text-slate-500';
+        STATE.markersGroup = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            chunkedLoading: true
         });
-        this.render();
+        STATE.map.addLayer(STATE.markersGroup);
     },
 
-    render() {
-        STATE.cluster.clearLayers();
-        STATE.data.forEach(item => {
-            if (STATE.currentFilter !== 'all' && item.type !== STATE.currentFilter) return;
+    setFilter(type) {
+        STATE.currentFilter = type;
+        // Update Filter UI
+        ['all', 'carpark', 'meter'].forEach(t => {
+            const btn = document.getElementById(`filter-${t}`);
+            if(t === type) {
+                btn.className = 'filter-btn px-4 py-1.5 rounded-full text-sm font-bold bg-blue-500 text-white shadow-sm transition-all';
+            } else {
+                btn.className = 'filter-btn px-4 py-1.5 rounded-full text-sm font-bold text-gray-500 hover:bg-white/50 transition-all';
+            }
+        });
+        this.renderMap();
+    },
 
-            const marker = L.marker([item.lat, item.lng], {
-                icon: item.type === 'carpark' ? UI_CONFIG.carparkIcon : UI_CONFIG.meterIcon
-            });
+    renderMap() {
+        STATE.markersGroup.clearLayers();
+        const markers = [];
 
-            const availColor = item.available > 0 ? 'text-emerald-500' : 'text-red-500';
-            let popupHtml = `
-                <div class="p-3 w-64">
-                    <span class="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-500 uppercase mb-2 inline-block">${item.type === 'carpark' ? '停車場' : '路段咪錶'}</span>
-                    <h3 class="text-lg font-black text-slate-900 leading-tight mb-2">${item.name}</h3>
-                    <div class="bg-slate-50 rounded-2xl p-4 mb-4 text-center border border-slate-100">
-                        <p class="text-[10px] font-bold text-slate-400 mb-1 uppercase">可用車位</p>
-                        <p class="text-3xl font-black ${availColor}">${item.available}${item.count ? `<span class="text-slate-300 text-sm"> / ${item.count}</span>` : ''}</p>
-                    </div>`;
+        STATE.allPointsMap.forEach((point, id) => {
+            // Apply Filter Logic
+            if(STATE.currentFilter !== 'all' && point.type !== STATE.currentFilter) return;
 
-            if(item.details) {
-                popupHtml += `<div class="flex gap-1 mb-4 flex-wrap">
-                    ${item.details.map(v => `<div class="h-4 flex-1 min-w-[8px] rounded-sm ${v?'bg-emerald-400':'bg-slate-200'}"></div>`).join('')}
+            const isMeter = point.type === 'meter';
+            const marker = L.marker([point.lat, point.lng], { icon: isMeter ? ICONS.meter : ICONS.carpark });
+
+            let contentHtml = '';
+            
+            // Pop-up UI Design (Liquid Glass inspired content inside Leaflet wrapper)
+            if (isMeter) {
+                const avail = point.available;
+                // Render small green/red blocks representing meters on the street
+                const blocks = point.statusArray.map(s => `
+                    <div class="h-6 min-w-[12px] flex-grow rounded-[4px] ${s === 1 ? 'bg-emerald-400' : 'bg-red-400/80'} shadow-sm border border-black/5"></div>
+                `).join('');
+
+                contentHtml = `
+                <div class="w-[280px] p-2">
+                    <div class="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider">Street Meters</div>
+                    <h3 class="font-black text-xl mb-4 leading-tight text-gray-800">${point.name}</h3>
+                    
+                    <div class="bg-gray-50/80 border border-gray-100 rounded-2xl p-4 mb-4 flex justify-between items-center shadow-inner">
+                        <div class="text-center w-full">
+                            <div class="text-[11px] text-gray-400 font-bold mb-1">路段可用錶位 / 總數</div>
+                            <div class="font-black text-2xl ${avail > 0 ? 'text-emerald-500' : 'text-red-500'}">
+                                ${avail} <span class="text-gray-300 text-lg">/ ${point.count}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-[10px] font-bold text-gray-400 mb-2 pl-1">實時佔用狀況分佈 (綠色為空)：</div>
+                    <div class="flex flex-wrap gap-1.5 w-full mb-6 bg-gray-50 p-2 rounded-xl border border-gray-100/50">
+                        ${blocks}
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl text-sm font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>導航至此</button>
+                        <button onclick="ui.openModal('save-modal', '${id}')" class="w-[50px] bg-white border border-gray-200 text-yellow-400 py-3.5 rounded-2xl text-lg shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
+                    </div>
+                </div>`;
+            } else {
+                const avail = point.available;
+                const availColor = avail > 0 ? 'text-emerald-500' : (avail === 0 ? 'text-red-500' : 'text-gray-500');
+
+                contentHtml = `
+                <div class="w-[260px] p-2">
+                    <div class="bg-blue-100 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider">Carpark</div>
+                    <h3 class="font-black text-xl mb-4 leading-tight text-gray-800">${point.name}</h3>
+                    
+                    <div class="bg-gray-50/80 border border-gray-100 rounded-2xl p-5 mb-6 text-center shadow-inner">
+                        <div class="text-[11px] text-gray-400 font-bold mb-2">實時剩餘空位</div>
+                        <div class="font-black text-5xl ${availColor}">${avail}</div>
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl text-sm font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>導航至此</button>
+                        <button onclick="ui.openModal('save-modal', '${id}')" class="w-[50px] bg-white border border-gray-200 text-yellow-400 py-3.5 rounded-2xl text-lg shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
+                    </div>
                 </div>`;
             }
 
-            popupHtml += `
-                <div class="flex gap-2">
-                    <button onclick="app.navigate(${item.lat}, ${item.lng})" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm interactive-scale shadow-lg shadow-blue-200"><i class="fa-solid fa-location-arrow mr-2"></i>導航</button>
-                    <button onclick="ui.savePrompt('${item.id}')" class="w-12 h-12 bg-slate-100 text-yellow-500 rounded-xl interactive-scale flex items-center justify-center"><i class="fa-solid fa-star"></i></button>
-                </div>
-            </div>`;
-
-            marker.bindPopup(popupHtml);
-            STATE.cluster.addLayer(marker);
+            marker.bindPopup(contentHtml, { closeButton: true, minWidth: 260 });
+            markers.push(marker);
         });
+
+        STATE.markersGroup.addLayers(markers);
     },
 
     navigate(lat, lng) {
-        const url = /iPad|iPhone|iPod/.test(navigator.userAgent) ? `maps://?q=${lat},${lng}` : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-        window.open(url, '_blank');
-    }
-};
-
-const ui = {
-    switchTab(tab) {
-        STATE.activeTab = tab;
-        document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
-        document.getElementById(`${tab}-view`).classList.add('active');
-        
-        document.getElementById('nav-map').className = tab === 'map' ? 'flex flex-col items-center text-blue-600' : 'flex flex-col items-center text-slate-400';
-        document.getElementById('nav-list').className = tab === 'list' ? 'flex flex-col items-center text-blue-600' : 'flex flex-col items-center text-slate-400';
-
-        if(tab === 'list') this.renderList();
-        if(tab === 'map') setTimeout(() => STATE.map.invalidateSize(), 100);
-    },
-
-    openModal(type, extra = null) {
-        const overlay = document.getElementById('modal-overlay');
-        const card = document.getElementById('modal-card');
-        overlay.classList.remove('hidden');
-        setTimeout(() => { overlay.classList.add('opacity-100'); card.classList.remove('scale-90'); }, 10);
-
-        if(type === 'save') {
-            const item = STATE.data.get(extra);
-            const lists = JSON.parse(localStorage.getItem('hkrm_lists') || '[{"id":"def","name":"我的收藏","items":[]}]');
-            card.innerHTML = `
-                <h3 class="text-xl font-black mb-6">儲存至...</h3>
-                <div class="space-y-3 mb-8">
-                    ${lists.map(l => `
-                        <button onclick="ui.performSave('${l.id}', '${item.id}')" class="w-full p-4 rounded-2xl bg-slate-50 flex justify-between items-center font-bold text-slate-700 hover:bg-slate-100">
-                            ${l.name} <i class="fa-solid fa-plus text-blue-600"></i>
-                        </button>
-                    `).join('')}
-                </div>
-                <button onclick="ui.closeModal()" class="w-full py-4 rounded-2xl bg-slate-100 font-bold text-slate-400">取消</button>
-            `;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isIOS) {
+            window.open(`http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, '_blank');
+        } else {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
         }
     },
 
-    savePrompt(id) { this.openModal('save', id); },
-
-    performSave(listId, itemId) {
-        const lists = JSON.parse(localStorage.getItem('hkrm_lists') || '[{"id":"def","name":"我的收藏","items":[]}]');
-        const list = lists.find(l => l.id === listId);
-        if(list && !list.items.includes(itemId)) {
-            list.items.push(itemId);
-            localStorage.setItem('hkrm_lists', JSON.stringify(lists));
-        }
-        this.closeModal();
-    },
-
-    closeModal() {
-        const overlay = document.getElementById('modal-overlay');
-        overlay.classList.remove('opacity-100');
-        document.getElementById('modal-card').classList.add('scale-90');
-        setTimeout(() => overlay.classList.add('hidden'), 300);
-    },
-
-    renderList() {
-        const container = document.getElementById('lists-render');
-        const lists = JSON.parse(localStorage.getItem('hkrm_lists') || '[{"id":"def","name":"我的收藏","items":[]}]');
-        container.innerHTML = lists.map(l => `
-            <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-center mb-4">
-                    <h4 class="font-black text-xl text-slate-900">${l.name}</h4>
-                    <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">${l.items.length} 個地點</span>
-                </div>
-                <div class="space-y-3">
-                    ${l.items.map(itemId => {
-                        const item = STATE.data.get(itemId);
-                        if(!item) return '';
-                        return `
-                        <div class="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
-                            <div>
-                                <p class="font-bold text-sm text-slate-800">${item.name}</p>
-                                <p class="text-[10px] text-slate-400">${item.type === 'carpark' ? '停車場' : '咪錶'}</p>
-                            </div>
-                            <button onclick="app.navigate(${item.lat}, ${item.lng})" class="text-blue-600 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center"><i class="fa-solid fa-arrow-right text-xs"></i></button>
-                        </div>`;
-                    }).join('')}
-                </div>
-            </div>
-        `).join('');
+    flyTo(lat, lng) {
+        ui.switchTab('map');
+        setTimeout(() => STATE.map.flyTo([lat, lng], 17, { duration: 1.2 }), 200);
     }
 };
+
+window.ui = ui;
+window.database = database;
+window.app = app;
 
 window.onload = () => app.init();
 </script>
