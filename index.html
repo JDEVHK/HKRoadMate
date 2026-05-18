@@ -360,7 +360,7 @@ const database = {
     }
 };
 
-// 5. Data Fetching Engine (100% Native, No External Libraries)
+// 5. Data Fetching Engine (Date-Bypass Parser)
 const engine = {
     async fetchCSV(url) {
         const res = await fetch(url);
@@ -370,7 +370,7 @@ const engine = {
         let view = new Uint8Array(buffer);
         let text = '';
         
-        // 智能偵測 UTF-16LE 與 UTF-8 (徹底破解政府隱形編碼陷阱)
+        // 智能偵測 UTF-16LE 與 UTF-8
         if ((view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) || 
             (view.length > 4 && view[1] === 0x00 && view[3] === 0x00)) {
             text = new TextDecoder('utf-16le').decode(buffer);
@@ -382,11 +382,19 @@ const engine = {
         text = text.replace(/\0/g, ''); 
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
+        // 【破解核心陷阱：移除首行時間戳】
+        let lines = text.split(/\r?\n/);
+        // 如果該行欄位少於 3 個（代表沒有足夠的逗號），就當作是政府塞入的日期戳記，直接丟棄！
+        while (lines.length > 0 && lines[0].split(',').length < 3) {
+            lines.shift();
+        }
+        text = lines.join('\n');
+
         return new Promise((resolve, reject) => {
             Papa.parse(text.trim(), {
                 header: true,
                 skipEmptyLines: true,
-                // 暴力淨化標題：移除所有非英數、非中文的字元，並轉小寫
+                // 淨化標題：移除所有非英數、非中文的字元，並轉小寫
                 transformHeader: h => h.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '').toLowerCase(),
                 complete: (results) => resolve(results.data),
                 error: (err) => reject(new Error("PapaParse 錯誤: " + err.message))
@@ -499,7 +507,7 @@ const engine = {
                 sec.statusArray.push(isVacant);
             });
 
-            // 【終極診斷器】如果全部失敗，印出第一筆資料的真實標題！
+            // 如果全部失敗，印出診斷報告
             if (validCount === 0) {
                 const sampleKeys = Object.keys(meterInfo[0]).join(', ');
                 const sampleValues = Object.values(meterInfo[0]).slice(0, 3).join(', ');
@@ -515,7 +523,7 @@ const engine = {
             return true;
         } catch (e) {
             console.error('Meter Data Error:', e);
-            alert(`咪錶載入失敗，錯誤細節：\n\n${e.message}\n\n請將這段文字告訴我！`);
+            alert(`咪錶載入失敗，錯誤細節：\n\n${e.message}`);
             throw e; 
         }
     },
