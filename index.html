@@ -369,11 +369,10 @@ const engine = {
                 if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                 const text = await res.text();
                 
+                // 移除 transformHeader，保留最原始的資料結構，交由下方正則與模糊搜尋處理
                 Papa.parse(text.trim(), {
                     header: true,
                     skipEmptyLines: true,
-                    // Crucial fix: Sanitize keys to handle weird BOM or whitespaces from Gov CSV
-                    transformHeader: h => h.trim().toLowerCase(),
                     complete: (results) => resolve(results.data),
                     error: (err) => reject(err)
                 });
@@ -398,7 +397,6 @@ const engine = {
             const vacancyMap = new Map();
             (vacancyData.results || []).forEach(v => {
                 let count = 0;
-                // Combine private car counts
                 if(v.privateCar && v.privateCar.length > 0) {
                     count = v.privateCar.reduce((sum, pc) => sum + (parseInt(pc.vacancy) || 0), 0);
                 }
@@ -436,51 +434,68 @@ const engine = {
 
             if (meterInfo.length === 0) throw new Error("Meter CSV empty");
 
-            // 建立實時空位對照表 (Vacancy Map)
+            // 建立實時空位對照表 (使用超強防呆模糊比對，免疫 BOM 錯誤)
             const vacancyMap = new Map();
             meterVac.forEach(row => {
-                // 精準對應政府 CSV 的欄位名稱 (已轉小寫)
-                const spaceId = row['parkingspaceid'] || row['space_id'] || row['spaceid'] || row['meter_id'];
-                const status = row['occupancystatus'] || row['status'];
-                if (spaceId) vacancyMap.set(spaceId, status);
+                const keys = Object.keys(row);
+                if(keys.length < 2) return;
+                
+                const idKey = keys.find(k => k.toLowerCase().includes('spaceid'));
+                // 優先精確尋找 occupancystatus，避免抓錯到 ParkingMeterStatus
+                const statusKey = keys.find(k => k.toLowerCase().includes('occupancystatus')) || 
+                                  keys.find(k => k.toLowerCase().includes('occupancy')) || 
+                                  keys.find(k => k.toLowerCase().includes('status'));
+                
+                if (idKey && row[idKey]) vacancyMap.set(row[idKey].toString().trim(), row[statusKey]);
             });
 
             // 將獨立咪錶分組為「街道區段」
             const streetSections = new Map();
             
             meterInfo.forEach(row => {
-                const lat = parseFloat(row['latitude'] || row['lat']);
-                const lng = parseFloat(row['longitude'] || row['long']);
-                const sectionName = row['sectionofstreet_tc'] || row['street_tc'] || row['address'] || '未命名路段';
-                const spaceId = row['parkingspaceid'] || row['space_id'] || row['spaceid'] || row['meter_id'];
+                const keys = Object.keys(row);
+                
+                // 動態搜尋座標與街道名稱的欄位
+                const latKey = keys.find(k => k.toLowerCase() === 'latitude' || k.toLowerCase().includes('lat'));
+                const lngKey = keys.find(k => k.toLowerCase() === 'longitude' || k.toLowerCase().includes('long'));
+                const streetKey = keys.find(k => k.toLowerCase().includes('sectionofstreet_tc') || k.toLowerCase().includes('street_tc') || k.toLowerCase().includes('address'));
+                const idKey = keys.find(k => k.toLowerCase().includes('spaceid'));
 
-                // 只要缺乏有效座標或 ID，就跳過該筆異常資料
+                if (!latKey || !lngKey || !idKey) return; // 確保有座標與 ID 才處理
+
+                const lat = parseFloat(row[latKey]);
+                const lng = parseFloat(row[lngKey]);
+                const spaceId = row[idKey] ? row[idKey].toString().trim() : null;
+                const sectionName = (streetKey && row[streetKey]) ? row[streetKey].trim() : '未命名路段';
+
                 if (isNaN(lat) || isNaN(lng) || !spaceId) return;
 
                 const status = vacancyMap.get(spaceId) || 'O';
-                // 'V' 或 'Vacant' 代表空置
-                const isVacant = (status === 'V' || status.toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
+                // 'V' 或 'Vacant' 才是空置
+                const isVacant = (status === 'V' || status.toString().toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
 
-                // 若該路段不存在，則建立新的路段群組
-                if (!streetSections.has(sectionName)) {
-                    streetSections.set(sectionName, {
-                        id: 'metersec_' + sectionName.replace(/\s/g, ''),
+                // 建立乾淨的 ID (去除空白)
+                const sectionId = 'metersec_' + sectionName.replace(/\s/g, '');
+                
+                if (!streetSections.has(sectionId)) {
+                    streetSections.set(sectionId, {
+                        id: sectionId,
                         type: 'meter', name: sectionName,
                         latSum: 0, lngSum: 0, count: 0, available: 0, statusArray: []
                     });
                 }
 
-                const sec = streetSections.get(sectionName);
+                const sec = streetSections.get(sectionId);
                 sec.latSum += lat;
                 sec.lngSum += lng;
                 sec.count += 1;
                 sec.available += isVacant;
-                sec.statusArray.push(isVacant);
+                sec.statusArray.push(isVacant); // 將每個錶位的狀態推進陣列，渲染在地圖上
             });
 
             if(streetSections.size === 0) throw new Error("No valid meter grouped");
 
-            // 計算路段中心座標並加入地圖數據庫
+            // 結算路段中心座標並匯入系統
             streetSections.forEach(sec => {
                 sec.lat = sec.latSum / sec.count;
                 sec.lng = sec.lngSum / sec.count;
@@ -489,7 +504,7 @@ const engine = {
             return true;
         } catch (e) {
             console.error('Meter Data Error:', e);
-            throw e;
+            throw e; // 拋出錯誤讓 Promise.allSettled 進入 Fallback
         }
     },
     
