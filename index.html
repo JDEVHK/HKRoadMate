@@ -360,45 +360,57 @@ const database = {
     }
 };
 
-// 5. Data Fetching Engine (Robust Fallback & Parsing)
+// 5. Data Fetching Engine (100% Native, No External Libraries)
 const engine = {
-    fetchCSV(url) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                
-                // 【核心解法】不直接轉為文字，改取原始位元組 (ArrayBuffer)
-                const buffer = await res.arrayBuffer();
-                const view = new Uint8Array(buffer);
-                let text = '';
-                
-                // 動態偵測檔案編碼 (精準破解 HK Gov 的 UTF-16LE 陷阱)
-                if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
-                    text = new TextDecoder('utf-16le').decode(buffer);
-                } else if (view.length >= 3 && view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
-                    text = new TextDecoder('utf-8').decode(buffer);
-                } else {
-                    text = new TextDecoder('utf-8').decode(buffer); // 預設降級
-                }
-
-                // 強制移除字首殘留的零寬度空白 (BOM)
-                if (text.charCodeAt(0) === 0xFEFF) {
-                    text = text.slice(1);
-                }
-
-                Papa.parse(text.trim(), {
-                    header: true,
-                    skipEmptyLines: true,
-                    // 強制統一標題格式：去頭尾空白、轉小寫、去引號、去所有中間空白
-                    transformHeader: h => h.replace(/"/g, '').trim().toLowerCase().replace(/\s/g, ''),
-                    complete: (results) => resolve(results.data),
-                    error: (err) => reject(new Error("PapaParse 錯誤: " + err.message))
-                });
-            } catch (error) {
-                reject(error);
+    async fetchCSV(url) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+            
+            // 讀取原始位元組並偵測編碼 (免疫政府資料的 UTF-16LE 陷阱)
+            const buffer = await res.arrayBuffer();
+            const view = new Uint8Array(buffer);
+            let text = '';
+            
+            if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) {
+                text = new TextDecoder('utf-16le').decode(buffer);
+            } else {
+                text = new TextDecoder('utf-8').decode(buffer);
             }
-        });
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+            // 100% 原生 CSV 解析器 (不依賴 PapaParse，免疫未引入 Library 錯誤)
+            const result = [];
+            let row = [], col = '', inQuotes = false;
+            
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                if (char === '"') {
+                    if (inQuotes && text[i+1] === '"') { col += '"'; i++; } // 處理跳脫雙引號
+                    else { inQuotes = !inQuotes; }
+                } else if (char === ',' && !inQuotes) {
+                    row.push(col.trim()); col = '';
+                } else if (char === '\n' && !inQuotes) {
+                    row.push(col.trim()); result.push(row); row = []; col = '';
+                } else if (char !== '\r') {
+                    col += char;
+                }
+            }
+            if (col !== '' || row.length > 0) { row.push(col.trim()); result.push(row); }
+            
+            if (result.length < 2) throw new Error("CSV 內容為空或格式異常");
+            
+            // 統一標題格式 (全小寫、無空白)
+            const headers = result[0].map(h => h.toLowerCase().replace(/\s/g, ''));
+            
+            return result.slice(1).map(r => {
+                let obj = {};
+                headers.forEach((h, i) => { obj[h] = r[i] || ''; });
+                return obj;
+            });
+        } catch (error) {
+            throw error;
+        }
     },
 
     async loadCarparks() {
@@ -408,7 +420,7 @@ const engine = {
                 fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW')
             ]);
             
-            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API Failed");
+            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API 連線失敗");
 
             const infoData = await infoRes.json();
             const vacancyData = await vacRes.json();
@@ -436,10 +448,9 @@ const engine = {
                 });
                 added++;
             });
-            if(added === 0) throw new Error("No carpark data parsed");
             return true;
         } catch (e) {
-            console.error('Carpark Data Error:', e);
+            console.error('Carpark Error:', e);
             throw e;
         }
     },
@@ -451,42 +462,45 @@ const engine = {
                 this.fetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
             ]);
 
-            if (!meterInfo || meterInfo.length === 0) throw new Error("Meter CSV is empty or failed to decode.");
-
-            // 1. 建立空位對照表 (Vacancy Map)
             const vacancyMap = new Map();
             meterVac.forEach(row => {
-                // 經過 transformHeader 淨化，鍵名絕對是小寫無空白
-                const spaceId = row['parkingspaceid'] || row['space_id'] || row['meter_id'];
-                const status = row['occupancystatus'] || row['status'];
-                if (spaceId) {
-                    vacancyMap.set(spaceId.toString().trim(), status);
+                const keys = Object.keys(row);
+                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meter_id'));
+                const statusKey = keys.find(k => k.includes('occupancystatus') || k.includes('status'));
+                
+                if (idKey && row[idKey]) {
+                    vacancyMap.set(row[idKey], row[statusKey]);
                 }
             });
 
-            // 2. 將獨立咪錶按路段群組化
             const streetSections = new Map();
             let validCount = 0;
             
             meterInfo.forEach(row => {
-                const lat = parseFloat(row['latitude'] || row['lat']);
-                const lng = parseFloat(row['longitude'] || row['long'] || row['lng']);
-                const sectionName = row['sectionofstreet_tc'] || row['street_tc'] || row['address'] || '未命名路段';
-                const spaceId = row['parkingspaceid'] || row['space_id'] || row['meter_id'];
+                const keys = Object.keys(row);
+                const latKey = keys.find(k => k === 'latitude' || k.includes('lat'));
+                const lngKey = keys.find(k => k === 'longitude' || k.includes('long'));
+                const streetKey = keys.find(k => k.includes('sectionofstreet_tc') || k.includes('address'));
+                const idKey = keys.find(k => k.includes('spaceid') || k.includes('meter_id'));
+
+                if (!latKey || !lngKey || !idKey) return;
+
+                const lat = parseFloat(row[latKey]);
+                const lng = parseFloat(row[lngKey]);
+                const spaceId = row[idKey];
+                const sectionName = (streetKey && row[streetKey]) ? row[streetKey] : '未命名路段';
 
                 if (isNaN(lat) || isNaN(lng) || !spaceId) return;
 
                 validCount++;
-                const status = vacancyMap.get(spaceId.toString().trim()) || 'O';
-                // 政府數據中 'V' 或 'Vacant' 代表空置
+                const status = vacancyMap.get(spaceId) || 'O';
                 const isVacant = (status === 'V' || status.toString().toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
 
-                const sectionId = 'metersec_' + sectionName.replace(/\s/g, '');
+                const sectionId = 'metersec_' + sectionName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
                 
                 if (!streetSections.has(sectionId)) {
                     streetSections.set(sectionId, {
-                        id: sectionId,
-                        type: 'meter', name: sectionName,
+                        id: sectionId, type: 'meter', name: sectionName,
                         latSum: 0, lngSum: 0, count: 0, available: 0, statusArray: []
                     });
                 }
@@ -499,9 +513,8 @@ const engine = {
                 sec.statusArray.push(isVacant);
             });
 
-            if(validCount === 0) throw new Error("No valid meter coordinates found after parsing.");
+            if(validCount === 0) throw new Error("成功解析檔案，但未找到任何有效的座標數據");
 
-            // 3. 計算路段中心點並加入地圖數據庫
             streetSections.forEach(sec => {
                 sec.lat = sec.latSum / sec.count;
                 sec.lng = sec.lngSum / sec.count;
@@ -510,8 +523,10 @@ const engine = {
             
             return true;
         } catch (e) {
-            console.error('Meter Data Error Details:', e);
-            throw e; // 將錯誤拋出以觸發適當的 UI 狀態
+            console.error('Meter Data Error:', e);
+            // 加入彈出視窗：如果失敗，直接告訴我們原因！
+            alert('咪錶載入失敗，錯誤細節：\n' + e.message);
+            throw e; 
         }
     },
     
