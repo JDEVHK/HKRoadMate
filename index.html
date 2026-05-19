@@ -23,7 +23,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        /* HKRoadMate: iOS 26 Liquid Glass Design System */
+        /* HKRoadMate Design System */
         :root {
             --glass-bg: rgba(255, 255, 255, 0.75);
             --glass-border: rgba(255, 255, 255, 0.6);
@@ -56,31 +56,30 @@
             position: absolute; top: 0; left: 0; width: 100%; height: calc(100vh - 85px); z-index: 10;
         }
 
-        /* Leaflet Overrides */
+        /* Leaflet Overrides - 移除了彈出視窗外的毛玻璃，提升效能 */
         .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.95) !important;
-            backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.98) !important;
+            border: 1px solid rgba(240, 240, 240, 1);
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
             border-radius: 1.5rem !important;
         }
-        .leaflet-popup-tip { background: rgba(255, 255, 255, 0.95) !important; }
+        .leaflet-popup-tip { background: rgba(255, 255, 255, 0.98) !important; }
         .leaflet-container a.leaflet-popup-close-button {
             color: #9ca3af; padding: 16px; font-weight: bold; width: 34px; height: 34px;
         }
 
-        /* MarkerCluster Overrides */
+        /* MarkerCluster Overrides - 徹底移除 blur 以解決模糊方塊與卡頓 */
         .marker-cluster {
             background-clip: padding-box; border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.4) !important;
+            background-color: rgba(59, 130, 246, 0.2) !important; /* 藍色柔和外圈 */
         }
         .marker-cluster div {
             width: 38px; height: 38px; margin: 2px;
             background-color: rgba(255, 255, 255, 0.95) !important;
-            backdrop-filter: blur(10px); border: 2.5px solid white;
+            border: 2.5px solid #3b82f6; /* 實線取代模糊 */
             color: #1e3a8a !important; font-weight: 800; font-size: 15px;
             display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; box-shadow: 0 6px 15px rgba(0,0,0,0.12);
+            border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
         /* 消除 Leaflet Icon 預設背景 */
@@ -186,11 +185,10 @@ const STATE = {
     currentFilter: 'all'
 };
 
-// 靜態停車場圖標
 const ICONS = {
     carpark: L.divIcon({
         className: 'custom-icon',
-        html: `<div class="bg-white rounded-full p-1 shadow-md border border-gray-100/50">
+        html: `<div class="bg-white rounded-full p-1 shadow-md border border-gray-100">
                 <div class="bg-blue-600 w-9 h-9 rounded-full shadow-inner flex items-center justify-center">
                     <i class="fa-solid fa-car text-white text-lg"></i>
                 </div>
@@ -234,9 +232,9 @@ const ui = {
         if (id === 'save-modal') {
             const wrapper = document.getElementById('modal-lists-wrapper');
             wrapper.innerHTML = database.get().map(l => `
-                <button onclick="database.saveItem('${l.id}')" class="w-full text-left px-5 py-4 bg-white/60 rounded-2xl flex justify-between items-center interactive-btn shadow-sm border border-gray-100 mb-2 hover:bg-white">
+                <button onclick="database.saveItem('${l.id}')" class="w-full text-left px-5 py-4 bg-gray-50 rounded-2xl flex justify-between items-center interactive-btn shadow-sm border border-gray-100 mb-2 hover:bg-white">
                     <span class="font-bold text-gray-800">${l.name}</span> 
-                    <i class="fa-solid fa-plus text-blue-600 bg-blue-50 w-7 h-7 flex items-center justify-center rounded-full"></i>
+                    <i class="fa-solid fa-plus text-blue-600 bg-blue-100 w-7 h-7 flex items-center justify-center rounded-full"></i>
                 </button>`).join('');
         }
 
@@ -319,12 +317,12 @@ const database = {
                         : '<i class="fa-solid fa-square-parking text-emerald-500 bg-emerald-50 p-2 rounded-lg mr-3"></i>';
 
                     return `
-                    <div class="bg-white/90 p-3.5 rounded-2xl flex justify-between items-center mb-3 shadow-sm border border-gray-100 interactive-btn" onclick="app.flyTo(${displayItem.lat}, ${displayItem.lng})">
+                    <div class="bg-white p-3.5 rounded-2xl flex justify-between items-center mb-3 shadow-sm border border-gray-100 interactive-btn" onclick="app.flyTo(${displayItem.lat}, ${displayItem.lng})">
                         <div class="flex items-center flex-1 pr-2">
                             ${iconType}
                             <div>
                                 <h4 class="font-bold text-gray-800 text-sm leading-tight mb-1 truncate max-w-[160px]">${displayItem.name}</h4>
-                                <span class="text-[10px] font-bold text-gray-400">${displayItem.type === 'carpark' ? '停車場' : '路段咪錶'}</span>
+                                <span class="text-[10px] font-bold text-gray-400">${displayItem.type === 'carpark' ? '停車場' : '路段咪錶 (100米內)'}</span>
                             </div>
                         </div>
                         <div class="flex items-center space-x-3">
@@ -352,40 +350,35 @@ const database = {
 };
 
 const engine = {
+    // Haversine 距離計算 (回傳公尺)
+    getDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180, Δλ = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    },
+
     async fetchCSV(url) {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
-        
         const buffer = await res.arrayBuffer();
         let view = new Uint8Array(buffer);
-        let text = '';
-        
-        if ((view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) || 
-            (view.length > 4 && view[1] === 0x00 && view[3] === 0x00)) {
-            text = new TextDecoder('utf-16le').decode(buffer);
-        } else {
-            text = new TextDecoder('utf-8').decode(buffer);
-        }
-
+        let text = ((view.length >= 2 && view[0] === 0xFF && view[1] === 0xFE) || (view.length > 4 && view[1] === 0x00 && view[3] === 0x00)) 
+            ? new TextDecoder('utf-16le').decode(buffer) : new TextDecoder('utf-8').decode(buffer);
         text = text.replace(/\0/g, ''); 
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
         let lines = text.split(/\r?\n/);
-        let headerIndex = lines.findIndex(line => {
-            const l = line.toLowerCase();
-            return l.includes('space') || l.includes('region') || l.includes('status') || l.includes('id');
-        });
-
+        let headerIndex = lines.findIndex(line => line.toLowerCase().match(/(space|region|status|id)/));
         if (headerIndex > 0) lines = lines.slice(headerIndex);
-        text = lines.join('\n');
 
         return new Promise((resolve, reject) => {
-            Papa.parse(text.trim(), {
-                header: true,
-                skipEmptyLines: true,
+            Papa.parse(lines.join('\n').trim(), {
+                header: true, skipEmptyLines: true,
                 transformHeader: h => h.replace(/[^a-zA-Z0-9\u4e00-\u9fa5_]/g, '').toLowerCase(),
                 complete: (results) => resolve(results.data),
-                error: (err) => reject(new Error("解析錯誤: " + err.message))
+                error: (err) => reject(err)
             });
         });
     },
@@ -396,26 +389,18 @@ const engine = {
                 fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=info&lang=zh_TW'),
                 fetch('https://api.data.gov.hk/v1/carpark-info-vacancy?data=vacancy&lang=zh_TW')
             ]);
-            
-            if(!infoRes.ok || !vacRes.ok) throw new Error("Carpark API Failed");
-
             const infoData = await infoRes.json();
             const vacancyData = await vacRes.json();
-
             const vacancyMap = new Map();
             (vacancyData.results || []).forEach(v => {
                 let count = 0;
-                if(v.privateCar && v.privateCar.length > 0) {
-                    count = v.privateCar.reduce((sum, pc) => sum + (parseInt(pc.vacancy) || 0), 0);
-                }
+                if(v.privateCar && v.privateCar.length > 0) count = v.privateCar.reduce((sum, pc) => sum + (parseInt(pc.vacancy) || 0), 0);
                 vacancyMap.set(v.park_Id, count < 0 ? 0 : count);
             });
 
             (infoData.results || []).forEach(cp => {
-                const lat = parseFloat(cp.latitude);
-                const lng = parseFloat(cp.longitude);
+                const lat = parseFloat(cp.latitude), lng = parseFloat(cp.longitude);
                 if(isNaN(lat) || isNaN(lng)) return;
-
                 const id = 'cp_' + cp.park_Id;
                 STATE.allPointsMap.set(id, {
                     id, type: 'carpark', name: cp.name || '政府數據停車場',
@@ -424,9 +409,7 @@ const engine = {
                 });
             });
             return true;
-        } catch (e) {
-            throw e;
-        }
+        } catch (e) { throw e; }
     },
 
     async loadMeters() {
@@ -436,105 +419,86 @@ const engine = {
                 this.fetchCSV('https://resource.data.one.gov.hk/td/psiparkingspaces/occupancystatus/occupancystatus.csv')
             ]);
 
-            if (!meterInfo || meterInfo.length === 0) throw new Error("無效的咪錶數據。");
-
-            // 1. 建立空位對照表 (精準尋找 spaceid, 避免 districtid 干擾)
             const vacancyMap = new Map();
             meterVac.forEach(row => {
                 const keys = Object.keys(row);
-                const exactId = keys.find(k => k === 'parkingspaceid' || k === 'spaceid' || k === 'meterid');
-                const idKey = exactId || keys.find(k => k.includes('space') || k.includes('meter'));
-                const statusKey = keys.find(k => k.includes('occupancy') || k.includes('status') || k.includes('狀態'));
-                
-                if (idKey && statusKey && row[idKey]) {
-                    vacancyMap.set(row[idKey].toString().trim(), row[statusKey]);
-                }
+                const idKey = keys.find(k => k.match(/(parkingspaceid|spaceid|meterid)/));
+                const statusKey = keys.find(k => k.match(/(occupancy|status|狀態)/));
+                if (idKey && statusKey && row[idKey]) vacancyMap.set(row[idKey].toString().trim(), row[statusKey]);
             });
 
-            // 2. 解析獨立車位並進行路段群組化
-            const streetSections = new Map();
-            
+            // 以街道為單位的群組優化 (大幅提升效能)
+            const streetGroupsMap = new Map();
+
             meterInfo.forEach(row => {
                 const keys = Object.keys(row);
-                // 精準鎖定經緯度與車位ID
-                const exactLat = keys.find(k => k === 'latitude' || k === 'lat');
-                const latKey = exactLat || keys.find(k => k.includes('lat') || k.includes('緯度'));
-                
-                const exactLng = keys.find(k => k === 'longitude' || k === 'lng');
-                const lngKey = exactLng || keys.find(k => k.includes('long') || k.includes('lng') || k.includes('經度'));
-                
-                const exactStreet = keys.find(k => k === 'sectionofstreet_tc' || k === 'street_tc');
-                const streetKey = exactStreet || keys.find(k => k.includes('street') || k.includes('address') || k.includes('路段'));
-
-                const exactId = keys.find(k => k === 'parkingspaceid' || k === 'spaceid');
-                const idKey = exactId || keys.find(k => k.includes('space') || k.includes('meter'));
+                const latKey = keys.find(k => k.match(/(latitude|lat|緯度)/));
+                const lngKey = keys.find(k => k.match(/(longitude|long|lng|經度)/));
+                const streetKey = keys.find(k => k.match(/(sectionofstreet_tc|street_tc|address|路段)/));
+                const idKey = keys.find(k => k.match(/(parkingspaceid|spaceid|meter)/));
 
                 if (!latKey || !lngKey || !idKey) return;
+                const lat = parseFloat(row[latKey]), lng = parseFloat(row[lngKey]);
+                if (isNaN(lat) || isNaN(lng) || lat < 22.1 || lat > 22.6 || lng < 113.8 || lng > 114.5) return;
 
-                const lat = parseFloat(row[latKey]);
-                const lng = parseFloat(row[lngKey]);
                 const spaceId = row[idKey];
                 const sectionName = (streetKey && row[streetKey]) ? row[streetKey].trim() : '未命名路段';
-
-                // 【核心修正】：嚴格限制座標範圍，徹底解決圖標飄移及雜訊數據問題 (香港邊界)
-                if (isNaN(lat) || isNaN(lng) || !spaceId || lat < 22.1 || lat > 22.6 || lng < 113.8 || lng > 114.5) return;
-
                 const status = vacancyMap.get(spaceId.toString().trim()) || 'O';
                 const isVacant = (status === 'V' || status.toString().toLowerCase() === 'vacant' || status === '0') ? 1 : 0;
 
-                const sectionId = 'metersec_' + sectionName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
-                
-                if (!streetSections.has(sectionId)) {
-                    streetSections.set(sectionId, {
-                        id: sectionId, type: 'meter', name: sectionName,
-                        latSum: 0, lngSum: 0, count: 0, available: 0,
-                        children: [] 
-                    });
+                let streetGroups = streetGroupsMap.get(sectionName);
+                if (!streetGroups) {
+                    streetGroups = [];
+                    streetGroupsMap.set(sectionName, streetGroups);
                 }
 
-                const sec = streetSections.get(sectionId);
-                sec.latSum += lat;
-                sec.lngSum += lng;
-                sec.count += 1;
-                sec.available += isVacant;
-                sec.children.push({ id: spaceId, lat: lat, lng: lng, isVacant: isVacant });
+                // 尋找 100米 內的群組
+                let foundGroup = null;
+                for (let group of streetGroups) {
+                    if (engine.getDistance(group.lat, group.lng, lat, lng) <= 100) {
+                        foundGroup = group; break;
+                    }
+                }
+
+                if (!foundGroup) {
+                    foundGroup = { 
+                        id: 'meter_' + sectionName + '_' + streetGroups.length, 
+                        type: 'meter', name: sectionName, 
+                        latSum: 0, lngSum: 0, count: 0, available: 0, children: [], 
+                        lat: lat, lng: lng // 初始座標
+                    };
+                    streetGroups.push(foundGroup);
+                }
+
+                // 更新群組數據
+                foundGroup.latSum += lat;
+                foundGroup.lngSum += lng;
+                foundGroup.count += 1;
+                foundGroup.lat = foundGroup.latSum / foundGroup.count; // 動態中心點
+                foundGroup.lng = foundGroup.lngSum / foundGroup.count;
+                foundGroup.available += isVacant;
+                foundGroup.children.push({ id: spaceId, lat: lat, lng: lng, isVacant: isVacant });
             });
 
-            // 計算群組中心點
-            streetSections.forEach(sec => {
-                sec.lat = sec.latSum / sec.count;
-                sec.lng = sec.lngSum / sec.count;
-                STATE.allPointsMap.set(sec.id, sec);
+            // 將所有群組合併進主圖層
+            streetGroupsMap.forEach(groups => {
+                groups.forEach(g => STATE.allPointsMap.set(g.id, g));
             });
             
             return true;
-        } catch (e) {
-            console.error('Meter Data Error:', e);
-            throw e; 
-        }
+        } catch (e) { console.error('Meter Error:', e); throw e; }
     }
 };
 
 const app = {
     async init() {
         this.initMap();
-
-        const results = await Promise.allSettled([
-            engine.loadCarparks(),
-            engine.loadMeters()
-        ]);
-
+        const results = await Promise.allSettled([ engine.loadCarparks(), engine.loadMeters() ]);
         const carparkSuccess = results[0].status === 'fulfilled';
         const meterSuccess = results[1].status === 'fulfilled';
 
-        if (!carparkSuccess && !meterSuccess) {
-            ui.setStatus('系統離線 - 請稍後重試', 'warning');
-        } else {
-            let msg = `已載入 `;
-            msg += carparkSuccess ? '停車場 ' : '';
-            msg += meterSuccess ? '路段咪錶' : '';
-            ui.setStatus(msg, (!carparkSuccess || !meterSuccess) ? 'warning' : 'success');
-        }
+        if (!carparkSuccess && !meterSuccess) ui.setStatus('系統離線', 'warning');
+        else ui.setStatus(`已載入 ${carparkSuccess ? '停車場 ' : ''}${meterSuccess ? '路段咪錶' : ''}`, 'success');
 
         document.getElementById('status-dot').classList.remove('animate-pulse');
         this.renderMap();
@@ -542,19 +506,28 @@ const app = {
     },
 
     initMap() {
-        STATE.map = L.map('map-container', { zoomControl: false, tap: true }).setView([22.3100, 114.1700], 13);
-        L.control.zoom({ position: 'bottomright' }).addTo(STATE.map);
+        // preferCanvas: true -> 硬體加速，解決圖標太多引起的卡頓問題
+        // zoomControl: false -> 隱藏預設縮放按鈕，讓出 UI 空間
+        // maxZoom: 22 -> 啟用超比例放大，車位不再重疊
+        STATE.map = L.map('map-container', { 
+            zoomControl: false, 
+            tap: true,
+            preferCanvas: true,
+            maxZoom: 22
+        }).setView([22.3100, 114.1700], 13);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap', maxZoom: 19
+            attribution: '© OpenStreetMap', 
+            maxNativeZoom: 19, // 圖資原始最大層級
+            maxZoom: 22 // 允許客戶端強制放大
         }).addTo(STATE.map);
 
         STATE.markersGroup = L.markerClusterGroup({
-            maxClusterRadius: 55,
+            maxClusterRadius: 60,
             spiderfyOnMaxZoom: true,
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
-            chunkedLoading: true
+            chunkedLoading: true // 分塊加載以保證流暢
         });
         STATE.map.addLayer(STATE.markersGroup);
 
@@ -568,8 +541,6 @@ const app = {
 
     setFilter(type) {
         STATE.currentFilter = type;
-        
-        // 更新 Modal 內的按鈕視覺狀態
         ['all', 'carpark', 'meter'].forEach(t => {
             const btn = document.getElementById(`btn-filter-${t}`);
             if(t === type) {
@@ -579,18 +550,14 @@ const app = {
                 btn.className = 'filter-option w-full py-4 rounded-2xl bg-white text-gray-600 font-bold interactive-btn shadow-sm border border-gray-100 flex justify-between px-5 items-center transition-all';
             }
         });
-        
-        if (STATE.expandedLayer) {
-            STATE.map.removeLayer(STATE.expandedLayer);
-            STATE.expandedLayer = null;
-        }
+        if (STATE.expandedLayer) { STATE.map.removeLayer(STATE.expandedLayer); STATE.expandedLayer = null; }
         this.renderMap();
     },
 
     expandMeters(pointId) {
-        if (STATE.expandedLayer) {
-            STATE.map.removeLayer(STATE.expandedLayer);
-        }
+        STATE.map.closePopup(); // 關閉原本的 Popup
+
+        if (STATE.expandedLayer) STATE.map.removeLayer(STATE.expandedLayer);
         STATE.expandedLayer = L.layerGroup().addTo(STATE.map);
 
         const point = STATE.allPointsMap.get(pointId);
@@ -599,13 +566,8 @@ const app = {
         point.children.forEach(child => {
             const color = child.isVacant ? '#10b981' : '#ef4444'; 
             const circle = L.circleMarker([child.lat, child.lng], {
-                radius: 7,
-                fillColor: color,
-                color: '#ffffff',
-                weight: 2,
-                fillOpacity: 1
+                radius: 6, fillColor: color, color: '#ffffff', weight: 1.5, fillOpacity: 1
             });
-            
             circle.bindPopup(`
                 <div class="font-bold text-center text-sm mb-1 text-gray-800">車位編號: ${child.id}</div>
                 <div class="text-center ${child.isVacant ? 'text-emerald-600' : 'text-red-600'} font-black text-lg">${child.isVacant ? '✅ 空置' : '❌ 已佔用'}</div>
@@ -614,7 +576,8 @@ const app = {
         });
         
         if (point.children.length > 0) {
-            STATE.map.fitBounds(STATE.expandedLayer.getBounds(), { padding: [60, 60], maxZoom: 18 });
+            // 自動放大到最大級別以防止車位重疊
+            STATE.map.fitBounds(STATE.expandedLayer.getBounds(), { padding: [60, 60], maxZoom: 22 });
         }
     },
 
@@ -629,57 +592,51 @@ const app = {
             let markerIcon;
 
             if (isMeter) {
-                // 【核心升級】：動態生成帶有「空位/總數」資訊的地圖圖標
                 const avail = point.available;
                 const total = point.count;
                 const bgColor = avail > 0 ? 'text-emerald-500' : 'text-red-500';
                 
+                // 移除原有的 backdrop-blur，改為實色透明背景解決渲染模糊方塊
                 const dynamicHtml = `
-                    <div class="bg-white/95 backdrop-blur-sm rounded-full pl-2 pr-3 py-1.5 shadow-md border border-gray-200/80 flex items-center justify-center whitespace-nowrap">
+                    <div class="bg-white/95 rounded-full pl-2 pr-3 py-1.5 shadow-sm border border-gray-200 flex items-center justify-center whitespace-nowrap">
                         <i class="fa-solid fa-square-parking ${bgColor} mr-1.5 text-base"></i>
                         <span class="font-black text-gray-800 text-sm leading-none">${avail}</span>
                         <span class="text-[11px] text-gray-400 font-bold ml-0.5 leading-none mt-0.5">/${total}</span>
                     </div>`;
 
-                markerIcon = L.divIcon({
-                    className: 'bg-transparent border-0',
-                    html: dynamicHtml,
-                    iconSize: [null, 32],
-                    iconAnchor: [35, 16],
-                    popupAnchor: [0, -16]
-                });
+                markerIcon = L.divIcon({ className: 'bg-transparent border-0', html: dynamicHtml, iconSize: [null, 32], iconAnchor: [35, 16], popupAnchor: [0, -16] });
             } else {
                 markerIcon = ICONS.carpark;
             }
 
             const marker = L.marker([point.lat, point.lng], { icon: markerIcon });
-            let contentHtml = '';
             
             if (isMeter) {
-                contentHtml = `
-                <div class="w-[280px] p-2">
-                    <div class="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider">Street Meters</div>
+                // 咪錶現在也擁有與停車場相同的完整互動 Popup，並加上了展開按鈕
+                const contentHtml = `
+                <div class="w-[260px] p-2">
+                    <div class="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider">Street Meters (100m內)</div>
                     <h3 class="font-black text-xl mb-4 leading-tight text-gray-800">${point.name}</h3>
                     
-                    <div class="bg-gray-50/80 border border-gray-100 rounded-2xl p-5 mb-6 text-center shadow-inner">
-                        <div class="text-[11px] text-gray-400 font-bold mb-2">路段可用錶位 / 總數</div>
+                    <div class="bg-gray-50/80 border border-gray-100 rounded-2xl p-5 mb-4 text-center shadow-inner">
+                        <div class="text-[11px] text-gray-400 font-bold mb-2">範圍內可用錶位 / 總數</div>
                         <div class="font-black text-5xl ${point.available > 0 ? 'text-emerald-500' : 'text-red-500'}">
                             ${point.available} <span class="text-2xl text-gray-400 font-bold">/ ${point.count}</span>
                         </div>
                     </div>
 
+                    <button onclick="app.expandMeters('${point.id}')" class="w-full bg-emerald-50 text-emerald-600 border border-emerald-100 py-3 rounded-2xl text-sm font-black shadow-sm interactive-btn mb-3 flex items-center justify-center"><i class="fa-solid fa-eye mr-2"></i>展開 100 米內車位</button>
+
                     <div class="flex space-x-3">
-                        <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl text-sm font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>導航至此</button>
+                        <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl text-sm font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>導航</button>
                         <button onclick="ui.openModal('save-modal', '${id}')" class="w-[50px] bg-white border border-gray-200 text-yellow-400 py-3.5 rounded-2xl text-lg shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
                     </div>
                 </div>`;
-                
-                marker.on('click', () => { app.expandMeters(point.id); });
+                marker.bindPopup(contentHtml, { closeButton: true, minWidth: 260 });
             } else {
                 const avail = point.available;
                 const availColor = avail > 0 ? 'text-emerald-500' : (avail === 0 ? 'text-red-500' : 'text-gray-500');
-
-                contentHtml = `
+                const contentHtml = `
                 <div class="w-[260px] p-2">
                     <div class="bg-blue-100 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider">Carpark</div>
                     <h3 class="font-black text-xl mb-4 leading-tight text-gray-800">${point.name}</h3>
@@ -694,22 +651,17 @@ const app = {
                         <button onclick="ui.openModal('save-modal', '${id}')" class="w-[50px] bg-white border border-gray-200 text-yellow-400 py-3.5 rounded-2xl text-lg shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
                     </div>
                 </div>`;
+                marker.bindPopup(contentHtml, { closeButton: true, minWidth: 260 });
             }
-
-            marker.bindPopup(contentHtml, { closeButton: true, minWidth: 260 });
             markers.push(marker);
         });
-
         STATE.markersGroup.addLayers(markers);
     },
 
     navigate(lat, lng) {
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        if (isIOS) {
-            window.open(`http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, '_blank');
-        } else {
-            window.open(`http://googleusercontent.com/maps.google.com/3{lat},${lng}`, '_blank');
-        }
+        if (isIOS) window.open(`http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`, '_blank');
+        else window.open(`http://googleusercontent.com/maps.google.com/3{lat},${lng}`, '_blank');
     },
 
     flyTo(lat, lng) {
@@ -721,7 +673,6 @@ const app = {
 window.ui = ui;
 window.database = database;
 window.app = app;
-
 window.onload = () => app.init();
 </script>
 </body>
