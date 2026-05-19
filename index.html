@@ -21,25 +21,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        :root {
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(255, 255, 255, 0.6);
-            --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
-        }
-
+        /* HKRoadMate Design System */
         body {
             margin: 0; padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
             background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             overflow: hidden; height: 100vh; width: 100vw;
             -webkit-tap-highlight-color: transparent;
+            transition: background 0.3s ease;
         }
 
         .glass-panel {
-            background: var(--glass-bg);
+            background: rgba(255, 255, 255, 0.75);
             backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+            transition: all 0.3s ease;
         }
 
         .glass-header {
@@ -47,21 +44,39 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.8);
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s ease;
         }
 
-        #map-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: calc(100vh - 85px); z-index: 10;
+        /* 🌟 黑暗模式 (Dark Mode) 全域設定 */
+        body.dark-mode {
+            background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+            color: #f3f4f6;
+        }
+        body.dark-mode .glass-panel {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        body.dark-mode .glass-header {
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        body.dark-mode .bg-white { background-color: #1f2937 !important; color: #f3f4f6 !important; border-color: rgba(255,255,255,0.05) !important; }
+        body.dark-mode .bg-gray-50, body.dark-mode .bg-gray-100 { background-color: #374151 !important; color: #f3f4f6 !important; }
+        body.dark-mode .text-gray-800 { color: #f9fafb !important; }
+        body.dark-mode .text-gray-600, body.dark-mode .text-gray-500 { color: #d1d5db !important; }
+        body.dark-mode .text-gray-400 { color: #9ca3af !important; }
+        body.dark-mode .border-gray-100, body.dark-mode .border-gray-200 { border-color: #4b5563 !important; }
+        
+        /* 地圖暗黑渲染 (魔法濾鏡) */
+        body.dark-mode .leaflet-layer,
+        body.dark-mode .leaflet-control-zoom-in,
+        body.dark-mode .leaflet-control-zoom-out,
+        body.dark-mode .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
 
-        /* 移除預設的模糊以保持效能 */
-        .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.98) !important;
-            border: 1px solid rgba(240, 240, 240, 1);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-            border-radius: 1.25rem !important;
-        }
-        .leaflet-popup-tip { background: rgba(255, 255, 255, 0.98) !important; }
-        .leaflet-container a.leaflet-popup-close-button { color: #9ca3af; padding: 12px; }
+        #map-container { position: absolute; top: 0; left: 0; width: 100%; height: calc(100vh - 85px); z-index: 10; }
         .leaflet-div-icon { background: transparent; border: none; }
 
         .marker-cluster { background-clip: padding-box; border-radius: 50%; background-color: rgba(59, 130, 246, 0.2) !important; }
@@ -73,6 +88,7 @@
             display: flex; align-items: center; justify-content: center;
             border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
+        body.dark-mode .marker-cluster div { background-color: #1e3a8a !important; border-color: #60a5fa; color: white !important; }
 
         .view-section {
             display: none; height: calc(100vh - 85px); overflow-y: auto; position: absolute;
@@ -86,23 +102,31 @@
         .interactive-btn:active { transform: scale(0.95); opacity: 0.8; }
         ::-webkit-scrollbar { display: none; }
 
-        /* Bottom Sheet Styles */
+        /* 🌟 拖曳式底板 (Bottom Sheet) */
         #bottom-sheet {
-            position: fixed; bottom: 0; left: 0; width: 100%;
-            background: rgba(255, 255, 255, 0.92);
+            position: fixed; left: 0; right: 0; top: 10vh; height: 90vh; /* 從頂部 10vh 開始，總高 90vh */
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            border-top: 1px solid rgba(255, 255, 255, 1);
             border-radius: 2.5rem 2.5rem 0 0;
-            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.15);
             z-index: 60;
-            transform: translateY(100%);
-            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transform: translateY(100%); /* 預設完全隱藏 (往下推 90vh) */
             display: flex; flex-direction: column;
             will-change: transform;
         }
+        body.dark-mode #bottom-sheet { background: rgba(30, 41, 59, 0.95); border-top: 1px solid rgba(255,255,255,0.1); }
+        
+        #drag-handle-area { padding: 15px 0; touch-action: none; cursor: grab; }
+        .drag-bar { width: 50px; height: 6px; background: #d1d5db; border-radius: 10px; margin: 0 auto; }
+        body.dark-mode .drag-bar { background: #4b5563; }
+
+        /* iOS Toggle Button */
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label:after { transform: translateX(100%); border-color: white; }
     </style>
 </head>
-<body class="text-gray-800 antialiased selection:bg-blue-300">
+<body class="text-gray-800 antialiased selection:bg-blue-300 transition-colors duration-300">
 
     <header class="fixed top-0 w-full glass-header z-40 px-5 py-3 pt-[max(env(safe-area-inset-top),0.75rem)] flex justify-between items-center rounded-b-[2rem]">
         <h1 class="text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center">
@@ -115,7 +139,7 @@
     </header>
 
     <main id="map-view" class="view-section active">
-        <button onclick="ui.openModal('filter-modal')" class="absolute top-[calc(env(safe-area-inset-top)+80px)] right-4 z-30 glass-panel w-12 h-12 rounded-full flex items-center justify-center text-blue-600 shadow-md interactive-btn border border-white/80">
+        <button onclick="ui.openModal('filter-modal')" class="absolute top-[calc(env(safe-area-inset-top)+80px)] right-4 z-30 glass-panel w-12 h-12 rounded-full flex items-center justify-center text-blue-600 shadow-md interactive-btn">
             <i class="fa-solid fa-layer-group text-lg"></i>
         </button>
         <div id="map-container"></div>
@@ -131,24 +155,63 @@
         <div id="lists-container" class="space-y-6 pb-20"></div>
     </main>
 
+    <main id="settings-view" class="view-section px-5 bg-gradient-to-b from-transparent to-gray-50/50">
+        <div class="mb-6 pt-2">
+            <h2 class="text-3xl font-black text-gray-800 tracking-tight">系統設定</h2>
+        </div>
+        
+        <div class="space-y-6 pb-20">
+            <div class="glass-panel rounded-[2rem] p-5 overflow-hidden shadow-sm">
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4"><i class="fa-solid fa-palette mr-2"></i>介面 (UI)</h3>
+                <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100">
+                    <span class="font-bold text-gray-800 text-lg">黑暗模式 (Dark Mode)</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="dark-mode-toggle" class="sr-only peer toggle-checkbox" onchange="settingsCtrl.toggleDark()">
+                        <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600 toggle-label"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-[2rem] p-5 overflow-hidden shadow-sm">
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4"><i class="fa-solid fa-database mr-2"></i>資料 (Data)</h3>
+                <button onclick="settingsCtrl.clearCache()" class="w-full flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 interactive-btn text-left">
+                    <div>
+                        <span class="block font-bold text-red-500 text-lg">清除所有系統快取</span>
+                        <span class="block text-xs text-gray-400 font-bold mt-1">這將清空你的收藏清單與設定</span>
+                    </div>
+                    <i class="fa-solid fa-trash-can text-red-300 text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="glass-panel rounded-[2rem] p-5 overflow-hidden shadow-sm">
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4"><i class="fa-solid fa-map mr-2"></i>地圖 (Map)</h3>
+                <p class="text-sm font-bold text-gray-500 leading-relaxed">地圖引擎：Leaflet.js<br>硬體加速 (Canvas)：已啟動<br>動態智慧縮放：運作中 (自動適應車位圖標)</p>
+            </div>
+        </div>
+    </main>
+
     <nav class="fixed bottom-0 w-full glass-header pb-[env(safe-area-inset-bottom)] z-40 rounded-t-[2.5rem]">
-        <div class="flex justify-around items-center h-[85px] px-8">
+        <div class="flex justify-around items-center h-[85px] px-4">
             <button onclick="ui.switchTab('map')" id="tab-map" class="flex flex-col items-center justify-center w-20 text-blue-600 font-black interactive-btn">
                 <i class="fa-solid fa-map-location-dot text-2xl mb-1.5 drop-shadow-sm"></i>
-                <span class="text-[11px] tracking-wider">地圖尋位</span>
+                <span class="text-[11px] tracking-wider">地圖</span>
             </button>
             <button onclick="ui.switchTab('list')" id="tab-list" class="flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn">
                 <i class="fa-solid fa-bookmark text-2xl mb-1.5"></i>
-                <span class="text-[11px] tracking-wider">收藏清單</span>
+                <span class="text-[11px] tracking-wider">收藏</span>
+            </button>
+            <button onclick="ui.switchTab('settings')" id="tab-settings" class="flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn">
+                <i class="fa-solid fa-gear text-2xl mb-1.5"></i>
+                <span class="text-[11px] tracking-wider">設定</span>
             </button>
         </div>
     </nav>
 
     <div id="bottom-sheet">
-        <div id="drag-handle" class="w-full pt-4 pb-2 flex justify-center items-center touch-none cursor-grab">
-            <div class="w-14 h-1.5 bg-gray-300 rounded-full"></div>
+        <div id="drag-handle-area">
+            <div class="drag-bar"></div>
         </div>
-        <div id="bottom-sheet-content" class="px-6 pb-10 overflow-y-auto flex-1 w-full max-w-lg mx-auto custom-scrollbar pt-2">
+        <div id="bottom-sheet-content" class="px-6 pb-12 overflow-y-auto flex-1 w-full max-w-lg mx-auto custom-scrollbar">
             </div>
     </div>
 
@@ -209,70 +272,100 @@ const ICONS = {
     })
 };
 
-// 🌟 Bottom Sheet 控制系統 (物理拖曳與狀態綁定)
+// 🌟 原生拖曳底板引擎 (Bottom Sheet Engine)
 const bottomSheet = {
     el: document.getElementById('bottom-sheet'),
     content: document.getElementById('bottom-sheet-content'),
-    handle: document.getElementById('drag-handle'),
-    startY: 0, currentY: 0, initialTranslateY: 0,
-    peekHeight: 0, fullHeight: 0, state: 'hidden',
+    handle: document.getElementById('drag-handle-area'),
+    startY: 0, currentY: 0, initialY: 0, isDragging: false,
+    peekY: 0, hiddenY: 0, fullY: 0, vh: 0,
 
     init() {
-        this.peekHeight = window.innerHeight * 0.65; // Peek 狀態：離頂部 65% (佔畫面 35%)
-        this.fullHeight = window.innerHeight * 0.10; // Full 狀態：離頂部 10% (全螢幕)
-        this.el.style.height = `${window.innerHeight * 0.9}px`; // 設定最大高度
-        this.el.style.transform = `translateY(100%)`;
-
-        this.handle.addEventListener('touchstart', this.onStart.bind(this), {passive: false});
-        this.handle.addEventListener('touchmove', this.onMove.bind(this), {passive: false});
-        this.handle.addEventListener('touchend', this.onEnd.bind(this));
-    },
-    onStart(e) {
-        this.startY = e.touches[0].clientY;
-        const style = window.getComputedStyle(this.el);
-        const matrix = new WebKitCSSMatrix(style.transform);
-        this.initialTranslateY = matrix.m42;
-        this.el.style.transition = 'none'; // 拖曳時取消動畫
-    },
-    onMove(e) {
-        e.preventDefault();
-        this.currentY = e.touches[0].clientY;
-        const deltaY = this.currentY - this.startY;
-        let newY = this.initialTranslateY + deltaY;
-        if (newY < this.fullHeight) newY = this.fullHeight; // 阻擋超過全螢幕
-        this.el.style.transform = `translateY(${newY}px)`;
-    },
-    onEnd(e) {
-        this.el.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        const finalY = this.initialTranslateY + (this.currentY - this.startY);
+        this.vh = window.innerHeight;
+        // top: 10vh. 總高: 90vh.
+        this.hiddenY = this.vh * 0.95; // 隱藏時推到底 (95vh)
+        this.peekY = this.vh * 0.55;   // 預覽時往下推 55vh (顯示下半部 35vh)
+        this.fullY = 0;                // 全螢幕時不推 (顯示滿 90vh)
         
-        // 判斷 Snap 吸附位置
-        if (finalY > this.peekHeight + 60) {
-            this.close(); // 下拉關閉
-        } else if (finalY < this.peekHeight - 60) {
-            this.snapTo('full'); // 上推全螢幕
-        } else {
-            this.snapTo('peek'); // 彈回 peek
-        }
+        this.el.style.transform = `translateY(${this.hiddenY}px)`;
+
+        this.handle.addEventListener('touchstart', (e) => {
+            this.startY = e.touches[0].clientY;
+            this.isDragging = true;
+            this.el.style.transition = 'none';
+            let style = window.getComputedStyle(this.el);
+            let matrix = new WebKitCSSMatrix(style.transform);
+            this.initialY = matrix.m42;
+        }, {passive: true});
+
+        document.addEventListener('touchmove', (e) => {
+            if(!this.isDragging) return;
+            this.currentY = e.touches[0].clientY;
+            let delta = this.currentY - this.startY;
+            let newY = this.initialY + delta;
+            if(newY < 0) newY = 0; 
+            this.el.style.transform = `translateY(${newY}px)`;
+        }, {passive: true});
+
+        document.addEventListener('touchend', (e) => {
+            if(!this.isDragging) return;
+            this.isDragging = false;
+            this.el.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            
+            // 如果沒滑動 (點擊)，假定 delta = 0
+            let delta = this.currentY === 0 ? 0 : this.currentY - this.startY;
+            this.currentY = 0; // reset
+            
+            let style = window.getComputedStyle(this.el);
+            let matrix = new WebKitCSSMatrix(style.transform);
+            let finalY = matrix.m42;
+            
+            // 判斷吸附點 (Snap Logic)
+            if (delta > 30 && finalY > this.peekY + 30) {
+                this.close(); // 往下滑動關閉
+            } else if (delta < -30 || finalY < this.peekY - 30) {
+                this.snap('full'); // 往上推至頂
+            } else {
+                this.snap('peek'); // 停留在預覽
+            }
+        });
     },
-    snapTo(state) {
-        this.state = state;
-        const y = state === 'peek' ? this.peekHeight : this.fullHeight;
-        this.el.style.transform = `translateY(${y}px)`;
+    snap(state) {
+        if(state === 'full') this.el.style.transform = `translateY(${this.fullY}px)`;
+        if(state === 'peek') this.el.style.transform = `translateY(${this.peekY}px)`;
+        if(state === 'hidden') this.el.style.transform = `translateY(${this.hiddenY}px)`;
     },
     open(html) {
         this.content.innerHTML = html;
         this.el.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        this.snapTo('peek');
+        this.snap('peek');
     },
     close() {
-        this.state = 'hidden';
-        this.el.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        this.el.style.transform = `translateY(100%)`;
-        // 關閉時自動清除地圖上展開的車位點
+        this.snap('hidden');
         if (STATE.expandedLayer) {
             STATE.map.removeLayer(STATE.expandedLayer);
             STATE.expandedLayer = null;
+        }
+    }
+};
+
+// 🌟 設定與暗黑模式控制器
+const settingsCtrl = {
+    init() {
+        const isDark = localStorage.getItem('hkrm_dark') === 'true';
+        if (isDark) {
+            document.body.classList.add('dark-mode');
+            document.getElementById('dark-mode-toggle').checked = true;
+        }
+    },
+    toggleDark() {
+        const isDark = document.body.classList.toggle('dark-mode');
+        localStorage.setItem('hkrm_dark', isDark);
+    },
+    clearCache() {
+        if(confirm("警告：這將會永久刪除您所有的收藏清單與自訂設定，確定要繼續嗎？")) {
+            localStorage.clear();
+            location.reload();
         }
     }
 };
@@ -291,8 +384,13 @@ const ui = {
     switchTab(tabId) {
         document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
         document.getElementById(`${tabId}-view`).classList.add('active');
-        document.getElementById('tab-map').className = "flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn";
-        document.getElementById('tab-list').className = "flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn";
+        
+        // 重設按鈕樣式
+        ['map', 'list', 'settings'].forEach(id => {
+            const btn = document.getElementById(`tab-${id}`);
+            btn.className = "flex flex-col items-center justify-center w-20 text-gray-400 font-bold interactive-btn";
+        });
+        
         const activeTab = document.getElementById(`tab-${tabId}`);
         activeTab.classList.replace('text-gray-400', 'text-blue-600');
         activeTab.classList.replace('font-bold', 'font-black');
@@ -321,11 +419,8 @@ const ui = {
 };
 
 const database = {
-    get() {
-        const data = localStorage.getItem('hkRoadMate_V5');
-        return data ? JSON.parse(data) : [{ id: 'default', name: '預設收藏', items: [] }];
-    },
-    set(data) { localStorage.setItem('hkRoadMate_V5', JSON.stringify(data)); this.renderView(); },
+    get() { return localStorage.getItem('hkrm_v6') ? JSON.parse(localStorage.getItem('hkrm_v6')) : [{ id: 'default', name: '預設收藏', items: [] }]; },
+    set(data) { localStorage.setItem('hkrm_v6', JSON.stringify(data)); this.renderView(); },
     createList() {
         const name = document.getElementById('new-list-name').value.trim();
         if (!name) return;
@@ -400,7 +495,6 @@ const database = {
 };
 
 const engine = {
-    // Haversine 距離計算
     getDistance(lat1, lon1, lat2, lon2) {
         const R = 6371e3;
         const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
@@ -408,9 +502,6 @@ const engine = {
         const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
         return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
     },
-
-    // 🌟 終極 ID 淨化器：清除所有干擾，只留英文與數字，確保 100% 匹配
-    cleanId(str) { return str ? str.toString().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : ''; },
 
     async fetchCSV(url) {
         const res = await fetch(url);
@@ -476,14 +567,15 @@ const engine = {
             meterVac.forEach(row => {
                 const keys = Object.keys(row);
                 const idKey = keys.find(k => k.match(/(parkingspaceid|spaceid|meterid)/));
-                const statusKey = keys.find(k => k.match(/(occupancy|status|狀態)/));
-                // 使用 cleanId 淨化寫入 Map
-                if (idKey && statusKey && row[idKey]) {
-                    vacancyMap.set(this.cleanId(row[idKey]), row[statusKey]);
-                }
+                // 🌟 精準打擊破案點：只抓 occupancystatus，絕不抓 parkingmeterstatus (因為機器正常N不是車位空置V)
+                const exactStatusKey = keys.find(k => k === 'occupancystatus');
+                const statusKey = exactStatusKey || keys.find(k => k.match(/occupancy/)) || keys.find(k => k.match(/status/));
+                
+                if (idKey && statusKey && row[idKey]) vacancyMap.set(row[idKey].toString().trim(), row[statusKey]);
             });
 
             const streetGroupsMap = new Map();
+
             meterInfo.forEach(row => {
                 const keys = Object.keys(row);
                 const latKey = keys.find(k => k.match(/(latitude|lat|緯度)/));
@@ -495,12 +587,11 @@ const engine = {
                 const lat = parseFloat(row[latKey]), lng = parseFloat(row[lngKey]);
                 if (isNaN(lat) || isNaN(lng) || lat < 22.1 || lat > 22.6 || lng < 113.8 || lng > 114.5) return;
 
-                const rawId = row[idKey];
-                const cleanSpaceId = this.cleanId(rawId); // 淨化 ID 來配對
+                const spaceId = row[idKey];
                 const sectionName = (streetKey && row[streetKey]) ? row[streetKey].trim() : '未命名路段';
                 
-                // 完美配對狀態
-                const status = vacancyMap.get(cleanSpaceId) || 'O';
+                // 匹配資料：政府資料中空置通常為 V (Vacant) 或是 0
+                const status = vacancyMap.get(spaceId.toString().trim()) || 'O';
                 const isVacant = (status.trim().toUpperCase() === 'V' || status === '0') ? 1 : 0;
 
                 let streetGroups = streetGroupsMap.get(sectionName);
@@ -509,7 +600,7 @@ const engine = {
                     streetGroupsMap.set(sectionName, streetGroups);
                 }
 
-                // 🌟 優化原生分組切割：閾值擴大至 250 米，盡可能保留原街道群組
+                // 250米 智慧群組 (優先原生街道，超過 250 米才切割)
                 let foundGroup = null;
                 for (let group of streetGroups) {
                     if (engine.getDistance(group.lat, group.lng, lat, lng) <= 250) {
@@ -530,24 +621,25 @@ const engine = {
                 foundGroup.latSum += lat;
                 foundGroup.lngSum += lng;
                 foundGroup.count += 1;
-                foundGroup.lat = foundGroup.latSum / foundGroup.count; 
+                foundGroup.lat = foundGroup.latSum / foundGroup.count;
                 foundGroup.lng = foundGroup.lngSum / foundGroup.count;
                 foundGroup.available += isVacant;
-                // 存入淨化後的 ID 給後續 UI 顯示
-                foundGroup.children.push({ id: cleanSpaceId, lat: lat, lng: lng, isVacant: isVacant });
+                foundGroup.children.push({ id: spaceId, lat: lat, lng: lng, isVacant: isVacant });
             });
 
             streetGroupsMap.forEach(groups => {
                 groups.forEach(g => STATE.allPointsMap.set(g.id, g));
             });
+            
             return true;
-        } catch (e) { throw e; }
+        } catch (e) { console.error('Meter Error:', e); throw e; }
     }
 };
 
 const app = {
     async init() {
-        bottomSheet.init(); // 初始化捲動底板
+        settingsCtrl.init(); // 初始化設定
+        bottomSheet.init();  // 初始化拖曳底板
         this.initMap();
         const results = await Promise.allSettled([ engine.loadCarparks(), engine.loadMeters() ]);
         const carparkSuccess = results[0].status === 'fulfilled';
@@ -562,7 +654,6 @@ const app = {
     },
 
     initMap() {
-        // 移除預設縮放鈕，開啟硬體加速，支援極限放大 (zoom 22)
         STATE.map = L.map('map-container', { zoomControl: false, tap: true, preferCanvas: true, maxZoom: 22 })
                      .setView([22.3100, 114.1700], 13);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -574,19 +665,18 @@ const app = {
         });
         STATE.map.addLayer(STATE.markersGroup);
 
-        // 🌟 會呼吸的車位：動態更新獨立車位圖標大小
+        // 🌟 會呼吸的車位：縮小變小，放大變大
         STATE.map.on('zoomend', () => {
             if (STATE.expandedLayer) {
                 const z = STATE.map.getZoom();
-                // 數學映射：Zoom 16 -> 6px, Zoom 22 -> 24px
-                const newRadius = Math.max(6, (z - 15) * 3);
+                // 動態比例縮放：從 6px 到 24px
+                const newRadius = Math.max(6, Math.min(24, (z - 15) * 3));
                 STATE.expandedLayer.eachLayer(layer => {
                     if(layer.setRadius) layer.setRadius(newRadius);
                 });
             }
         });
         
-        // 點擊地圖空白處時，關閉底板
         STATE.map.on('click', () => { bottomSheet.close(); });
     },
 
@@ -601,13 +691,16 @@ const app = {
                 btn.className = 'filter-option w-full py-4 rounded-2xl bg-white text-gray-600 font-bold interactive-btn shadow-sm border border-gray-100 flex justify-between px-5 items-center transition-all';
             }
         });
-        bottomSheet.close(); // 切換篩選時關閉底板
+        bottomSheet.close(); 
         this.renderMap();
     },
 
     showDetails(pointId) {
         const point = STATE.allPointsMap.get(pointId);
         if (!point) return;
+
+        // 🌟 自動放大置中魔法 (利用 padding 預留 Bottom Sheet 空間)
+        STATE.map.flyTo([point.lat, point.lng], 18, { animate: true, duration: 0.6 });
 
         let contentHtml = '';
         if (point.type === 'meter') {
@@ -616,19 +709,19 @@ const app = {
             contentHtml = `
             <div class="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider mt-1">Street Meters</div>
             <h3 class="font-black text-2xl mb-4 leading-tight text-gray-800">${point.name}</h3>
-            <div class="bg-gray-50 border border-gray-100 rounded-3xl p-6 mb-6 text-center shadow-inner">
+            <div class="bg-gray-50 border border-gray-100 rounded-3xl p-6 mb-6 text-center shadow-inner transition-colors duration-300">
                 <div class="text-[12px] text-gray-400 font-bold mb-2 uppercase tracking-wide">路段實時可用 / 總錶位</div>
                 <div class="font-black text-6xl ${avail > 0 ? 'text-emerald-500' : 'text-red-500'}">
                     ${avail} <span class="text-3xl text-gray-400 font-bold">/ ${total}</span>
                 </div>
             </div>
-            <p class="text-sm font-bold text-gray-400 text-center mb-6"><i class="fa-solid fa-arrow-up-long mr-2"></i>向上滑動以展開，查看單一車位</p>
+            <p class="text-sm font-bold text-gray-400 text-center mb-6"><i class="fa-solid fa-arrow-up-long mr-2"></i>向上滑動以全螢幕展開</p>
             <div class="flex space-x-3 pb-8">
                 <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-base font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>開啟導航</button>
-                <button onclick="ui.openModal('save-modal', '${pointId}')" class="w-[60px] bg-white border border-gray-200 text-yellow-400 py-4 rounded-2xl text-xl shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
+                <button onclick="ui.openModal('save-modal', '${pointId}')" class="w-[60px] bg-white border border-gray-200 text-yellow-400 py-4 rounded-2xl text-xl shadow-sm interactive-btn flex items-center justify-center"><i class="fa-solid fa-star"></i></button>
             </div>`;
             
-            // 開啟底板的同時，在地圖上鋪排獨立車位
+            // 鋪排車位
             this.expandMeters(point);
         } else {
             const avail = point.available;
@@ -636,13 +729,14 @@ const app = {
             contentHtml = `
             <div class="bg-blue-100 text-blue-700 text-[10px] font-black px-2.5 py-1 rounded-md inline-block mb-3 uppercase tracking-wider mt-1">Carpark</div>
             <h3 class="font-black text-2xl mb-4 leading-tight text-gray-800">${point.name}</h3>
-            <div class="bg-gray-50 border border-gray-100 rounded-3xl p-6 mb-6 text-center shadow-inner">
+            <div class="bg-gray-50 border border-gray-100 rounded-3xl p-6 mb-6 text-center shadow-inner transition-colors duration-300">
                 <div class="text-[12px] text-gray-400 font-bold mb-2 uppercase tracking-wide">實時剩餘空位</div>
                 <div class="font-black text-6xl ${availColor}">${avail}</div>
             </div>
-            <div class="flex space-x-3 pb-8 mt-10">
+            <p class="text-sm font-bold text-gray-400 text-center mb-6"><i class="fa-solid fa-arrow-up-long mr-2"></i>向上滑動以全螢幕展開</p>
+            <div class="flex space-x-3 pb-8">
                 <button onclick="app.navigate(${point.lat}, ${point.lng})" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-base font-black shadow-md interactive-btn flex items-center justify-center"><i class="fa-solid fa-location-arrow mr-2"></i>開啟導航</button>
-                <button onclick="ui.openModal('save-modal', '${pointId}')" class="w-[60px] bg-white border border-gray-200 text-yellow-400 py-4 rounded-2xl text-xl shadow-sm interactive-btn flex items-center justify-center hover:bg-gray-50"><i class="fa-solid fa-star"></i></button>
+                <button onclick="ui.openModal('save-modal', '${pointId}')" class="w-[60px] bg-white border border-gray-200 text-yellow-400 py-4 rounded-2xl text-xl shadow-sm interactive-btn flex items-center justify-center"><i class="fa-solid fa-star"></i></button>
             </div>`;
         }
 
@@ -654,7 +748,7 @@ const app = {
         STATE.expandedLayer = L.layerGroup().addTo(STATE.map);
 
         const currentZoom = STATE.map.getZoom();
-        const initialRadius = Math.max(6, (currentZoom - 15) * 3);
+        const initialRadius = Math.max(6, Math.min(24, (currentZoom - 15) * 3));
 
         point.children.forEach(child => {
             const color = child.isVacant ? '#10b981' : '#ef4444'; 
@@ -662,7 +756,7 @@ const app = {
                 radius: initialRadius, fillColor: color, color: '#ffffff', weight: 2, fillOpacity: 1
             });
             
-            // 獨立車位點依然保留極簡 Popup
+            // 單一車位點 Popup 依然保留，方便查看車位編號
             circle.bindPopup(`
                 <div class="font-bold text-center text-xs mb-0.5 text-gray-500">ID: ${child.id}</div>
                 <div class="text-center ${child.isVacant ? 'text-emerald-600' : 'text-red-600'} font-black text-base">${child.isVacant ? '✅ 空置' : '❌ 已佔用'}</div>
@@ -671,13 +765,15 @@ const app = {
             STATE.expandedLayer.addLayer(circle);
         });
         
-        // 偏移畫面，確保展開的車位不會被底板 (Bottom Sheet) 遮擋
+        // 微調視野，確保車位剛好出現在 Bottom Sheet 預留的空間上方
         if (point.children.length > 0) {
-            STATE.map.fitBounds(STATE.expandedLayer.getBounds(), { 
-                paddingBottomRight: [0, window.innerHeight * 0.4], // 預留底部空間
-                paddingTopLeft: [40, 40],
-                maxZoom: 18 
-            });
+            setTimeout(() => {
+                STATE.map.fitBounds(STATE.expandedLayer.getBounds(), { 
+                    paddingBottomRight: [0, window.innerHeight * 0.45], // 為 Bottom Sheet 讓路
+                    paddingTopLeft: [40, 40],
+                    maxZoom: 19 
+                });
+            }, 600); // 等待 flyTo 結束後再微調
         }
     },
 
@@ -695,7 +791,7 @@ const app = {
                 const avail = point.available;
                 const bgColor = avail > 0 ? 'text-emerald-500' : 'text-red-500';
                 const dynamicHtml = `
-                    <div class="bg-white/95 rounded-full pl-2 pr-3 py-1.5 shadow-sm border border-gray-200 flex items-center justify-center whitespace-nowrap">
+                    <div class="bg-white/95 rounded-full pl-2 pr-3 py-1.5 shadow-sm border border-gray-200 flex items-center justify-center whitespace-nowrap transition-colors duration-300">
                         <i class="fa-solid fa-square-parking ${bgColor} mr-1.5 text-base"></i>
                         <span class="font-black text-gray-800 text-sm leading-none">${avail}</span>
                         <span class="text-[11px] text-gray-400 font-bold ml-0.5 leading-none mt-0.5">/${point.count}</span>
@@ -707,8 +803,11 @@ const app = {
 
             const marker = L.marker([point.lat, point.lng], { icon: markerIcon });
             
-            // 🌟 移除 Popup，改為點擊觸發 Bottom Sheet
-            marker.on('click', () => { this.showDetails(point.id); });
+            // 🌟 點擊攔截，觸發置中放大與 Bottom Sheet
+            marker.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                this.showDetails(point.id);
+            });
             
             markers.push(marker);
         });
@@ -723,13 +822,14 @@ const app = {
 
     flyTo(lat, lng) {
         ui.switchTab('map');
-        setTimeout(() => STATE.map.flyTo([lat, lng], 17, { duration: 1.2 }), 200);
+        setTimeout(() => STATE.map.flyTo([lat, lng], 18, { duration: 1.2 }), 200);
     }
 };
 
 window.ui = ui;
 window.database = database;
 window.app = app;
+window.settingsCtrl = settingsCtrl;
 window.onload = () => app.init();
 </script>
 </body>
